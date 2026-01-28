@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["domain", "aggregates", "use_cases", "business_rules"],
+  "additionalProperties": false,
+
+  "properties": {
+    "domain": {
+      "type": "string",
+      "description": "Nombre del dominio de negocio"
+    },
+
+    "aggregates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "root_entity", "entities", "value_objects"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "root_entity": { "type": "string" },
+          "entities": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "value_objects": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+
+    "use_cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "actor", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "actor": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+
+    "business_rules": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

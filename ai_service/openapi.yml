@@ -1,0 +1,64 @@
+openapi: 3.0.1
+info:
+  title: Factoria AI Service
+  version: 1.0.0
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /ai/run:
+    post:
+      summary: Run AI pipeline (HTTP sync)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiRequest'
+      responses:
+        '200':
+          description: AI response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiResponse'
+components:
+  schemas:
+    AiRequest:
+      type: object
+      required: [caseId, task, input]
+      properties:
+        caseId:
+          type: string
+        task:
+          type: string
+          description: Reserved logical task name
+        traceId:
+          type: string
+        promptVersion:
+          type: string
+          example: v1
+        input:
+          type: object
+    AiResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        approved:
+          type: boolean
+        needsHumanApproval:
+          type: boolean
+        riskScore:
+          type: number
+        result:
+          type: object
+        requirements:
+          type: object
+        compliance:
+          type: object
+        audit:
+          type: object

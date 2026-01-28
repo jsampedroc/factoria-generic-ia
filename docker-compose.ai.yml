@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    container_name: factoria-redpanda
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - "1G"
+      - --reserve-memory
+      - "0M"
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda:9092
+    ports:
+      - "9092:9092"
+    networks:
+      - factoria-network
+    restart: unless-stopped
+
+  ai-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai
+    container_name: factoria-ai-api
+    environment:
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      AI_MODEL: ${AI_MODEL:-deepseek-chat}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.deepseek.com}
+      AI_TEMPERATURE: ${AI_TEMPERATURE:-0.1}
+      FEATURE_STRICT_JSON: "true"
+      FEATURE_RETRY_ON_INVALID_JSON: "true"
+      FEATURE_REQUIRE_HUMAN_APPROVAL: "true"
+    ports:
+      - "8000:8000"
+    networks:
+      - factoria-network
+    restart: unless-stopped
+
+  ai-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai
+    container_name: factoria-ai-worker
+    environment:
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      AI_MODEL: ${AI_MODEL:-deepseek-chat}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.deepseek.com}
+      AI_TEMPERATURE: ${AI_TEMPERATURE:-0.1}
+      KAFKA_BOOTSTRAP: redpanda:9092
+      KAFKA_TOPIC_JOBS: ai.jobs
+      KAFKA_TOPIC_RESULTS: ai.results
+      KAFKA_TOPIC_DLQ: ai.dlq
+      KAFKA_GROUP_ID: ai-workers
+      FEATURE_STRICT_JSON: "true"
+      FEATURE_RETRY_ON_INVALID_JSON: "true"
+      FEATURE_REQUIRE_HUMAN_APPROVAL: "true"
+    command: ["python", "-m", "ai_service.kafka_worker"]
+    depends_on:
+      - redpanda
+    networks:
+      - factoria-network
+    restart: unless-stopped

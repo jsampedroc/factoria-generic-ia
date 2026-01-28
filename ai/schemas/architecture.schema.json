@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["style", "layers", "communication", "infrastructure"],
+  "additionalProperties": false,
+
+  "properties": {
+    "style": {
+      "type": "string",
+      "enum": ["monolith", "modular-monolith", "microservices"]
+    },
+
+    "layers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["api", "application", "domain", "infrastructure"]
+      }
+    },
+
+    "communication": {
+      "type": "string",
+      "enum": ["sync", "async", "mixed"]
+    },
+
+    "infrastructure": {
+      "type": "object",
+      "required": ["database", "messaging"],
+      "additionalProperties": false,
+      "properties": {
+        "database": { "type": "string" },
+        "messaging": { "type": "string" }
+      }
+    }
+  }
+}

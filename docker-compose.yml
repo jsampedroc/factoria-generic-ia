@@ -1,0 +1,110 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: factoria-db
+    environment:
+      POSTGRES_DB: factoria_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - factoria-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d factoria_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    container_name: factoria-redpanda
+    command:
+      - redpanda
+      - start
+      - --smp
+      - "1"
+      - --memory
+      - "1G"
+      - --overprovisioned
+      - --node-id
+      - "0"
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda:9092
+    ports:
+      - "9092:9092"
+    networks:
+      - factoria-network
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: factoria-backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/factoria_db
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: admin123
+
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      AI_API_BASE_URL: http://ai-api:8000
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_started
+    networks:
+      - factoria-network
+    restart: unless-stopped
+
+  ai-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai
+    container_name: factoria-ai-api
+    environment:
+      CREWAI_TELEMETRY: "false"
+      OTEL_LOG_LEVEL: "ERROR"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - factoria-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: factoria-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - factoria-network
+    restart: unless-stopped
+
+networks:
+  factoria-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

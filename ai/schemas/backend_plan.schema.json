@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["project", "modules"],
+  "additionalProperties": false,
+
+  "properties": {
+    "project": {
+      "type": "object",
+      "required": ["name", "language", "framework"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "language": { "type": "string", "enum": ["java"] },
+        "framework": { "type": "string", "enum": ["spring-boot"] }
+      }
+    },
+
+    "modules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "entities", "endpoints"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "entities": { "type": "array", "items": { "type": "string" } },
+          "endpoints": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}
