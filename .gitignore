@@ -1,3 +1,16 @@
+# macOS
+.DS_Store
 
-# Secrets
-.env
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Outputs / generated files
+outputs/
+
+# (opcional) Entornos virtuales
+.venv/
+venv/
+env/

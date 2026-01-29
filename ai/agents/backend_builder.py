@@ -1,23 +1,19 @@
 from crewai import Agent
 from ai.llm.llm_config import llm
-# Bien
 from ai.tools.file_writer import file_writer
-
 
 backend_builder = Agent(
     role="Backend Builder",
-    goal=(
-        "Generar un proyecto backend Java/Spring Boot "
-        "siguiendo exactamente backend_plan.schema.json"
-    ),
+    goal="Generar un proyecto backend Java/Spring Boot siguiendo el plan establecido",
     backstory=(
-        "Eres un generador de código.\n"
-        "NO explicas nada.\n"
-        "NO produces texto fuera de archivos.\n"
-        "Usas EXCLUSIVAMENTE el tool file_writer."
+        "Eres un experto programador Java. Tu única misión es escribir el código. "
+        "REGLA DE ORO: Para escribir archivos, usa la herramienta 'file_writer' "
+        "siempre con el argumento 'files'. "
+        "Ejemplo: file_writer(files={'src/main/java/App.java': 'public class...'Set tracing=True}) "
+        "No des explicaciones, solo genera los archivos necesarios."
     ),
     llm=llm,
-    tools=[file_writer],  # ✅ FUNCIÓN, NO clase
+    tools=[file_writer],
     verbose=True,
     allow_delegation=False,
 )

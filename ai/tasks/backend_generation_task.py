@@ -1,21 +1,13 @@
 from crewai import Task
-from pathlib import Path
 from ai.agents.backend_builder import backend_builder
-from ai.validation.json_validator import validate_json
-
-def post_process_backend(output: dict):
-    validate_json(
-        output,
-        Path("ai/schemas/backend_plan.schema.json")
-    )
-    return output
 
 backend_generation_task = Task(
     description=(
-        "Genera el plan de generación del backend Java (Spring Boot). "
-        "Incluye estructura de paquetes, entidades, repositorios y config."
+        "Implementa el sistema backend en Java/Spring Boot siguiendo la arquitectura definida. "
+        "Crea las entidades, repositorios, servicios y controladores necesarios. "
+        "Usa 'file_writer' para escribir cada archivo en su ruta (ej: src/main/java/...). "
+        "No te limites a un plan, ESCRIBE los archivos reales."
     ),
     agent=backend_builder,
-    expected_output="JSON con estructura y ficheros a generar",
-    post_process=post_process_backend,
+    expected_output="Estructura de proyecto Maven con todo el código Java escrito en disco."
 )

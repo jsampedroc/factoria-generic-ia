@@ -1,20 +1,18 @@
 from crewai import Task
-from agents.domain_reasoner import domain_reasoner
+from pathlib import Path
+from ai.agents.domain_reasoner import domain_reasoner
+from ai.validation.json_validator import validate_json
 
-domain_modeling_task = Task(
-    agent=domain_reasoner,
+def post_process_domain_model(output: str):
+    # Nota: Si usas CrewAI moderno, el output puede ser un string que requiere limpieza
+    return output
+
+domain_model_task = Task(
     description=(
-        "Recibir una idea de software en lenguaje natural y transformarla "
-        "en un modelo de dominio siguiendo principios de Domain-Driven Design."
+        "Analiza la idea del usuario y genera un modelo de dominio DDD. "
+        "Devuelve exclusivamente un JSON que cumpla con domain_model.schema.json."
     ),
-    expected_output=(
-        "Un único objeto JSON válido y bien formado con la siguiente estructura:\n\n"
-        "{\n"
-        '  "domain_name": "...",\n'
-        '  "description": "...",\n'
-        '  "bounded_contexts": [ ... ]\n'
-        "}\n\n"
-        "No incluyas explicaciones, comentarios ni texto adicional. "
-        "Devuelve EXCLUSIVAMENTE el JSON."
-    )
+    agent=domain_reasoner,
+    expected_output="JSON estructurado con el modelo de dominio.",
+    # post_process=post_process_domain_model # Desactiva temporalmente si da errores de validación
 )

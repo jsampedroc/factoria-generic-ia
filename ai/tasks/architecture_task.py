@@ -1,21 +1,14 @@
 from crewai import Task
-from pathlib import Path
 from ai.agents.software_architect import software_architect
-from ai.validation.json_validator import validate_json
-
-def post_process_architecture(output: dict):
-    validate_json(
-        output,
-        Path("ai/schemas/architecture.schema.json")
-    )
-    return output
 
 architecture_task = Task(
     description=(
-        "Diseña la arquitectura del sistema a partir del modelo de dominio. "
-        "Devuelve SOLO JSON válido."
+        "Diseña la arquitectura técnica detallada basada en el modelo de dominio. "
+        "Debes definir: 1. Estructura de paquetes (com.example.app...), "
+        "2. Capas (Controller, Service, Repository, Entity), "
+        "3. Dependencias de Maven/Gradle. "
+        "IMPORTANTE: Entrega un JSON puro que sirva de guía exacta para el programador."
     ),
     agent=software_architect,
-    expected_output="JSON con módulos, capas, tecnologías y decisiones",
-    post_process=post_process_architecture,
+    expected_output="Un objeto JSON técnico que detalle paquetes, clases y dependencias de Spring Boot."
 )

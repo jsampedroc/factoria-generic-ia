@@ -7,8 +7,9 @@ pattern_librarian = Agent(
     role="Pattern Librarian",
     goal="Detectar patrones reutilizables y almacenarlos.",
     backstory=(
-        "Eres el bibliotecario de la factoría. "
-        "Detectas cuándo una solución es reutilizable."
+        "Eres el bibliotecario de la factoría. Detectas soluciones genéricas. "
+        "Cuando guardes un patrón, usa 'file_writer' pasando el diccionario "
+        "en el parámetro 'files'. No olvides nunca la clave 'files'."
     ),
     llm=llm,
     tools=[file_writer],
