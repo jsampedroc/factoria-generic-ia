@@ -3,11 +3,13 @@ from ai.agents.backend_builder import backend_builder
 
 backend_generation_task = Task(
     description=(
-        "Implementa el sistema backend en Java/Spring Boot siguiendo la arquitectura definida. "
-        "Crea las entidades, repositorios, servicios y controladores necesarios. "
-        "Usa 'file_writer' para escribir cada archivo en su ruta (ej: src/main/java/...). "
-        "No te limites a un plan, ESCRIBE los archivos reales."
+        "Genera el código Java Spring Boot completo. "
+        "REGLA DE ORO: Crea TODOS los archivos necesarios para que el proyecto compile, "
+        "incluyendo entidades, repositorios, controladores y EVENTOS. "
+        "Si una clase importa algo, ese algo DEBE ser creado. "
+        "Usa 'file_writer' para guardar los archivos empezando por 'pom.xml' "
+        "y siguiendo con 'src/main/java/...'."
     ),
     agent=backend_builder,
-    expected_output="Estructura de proyecto Maven con todo el código Java escrito en disco."
+    expected_output="Proyecto Java completo y listo para ser compilado por Maven."
 )

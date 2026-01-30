@@ -1,0 +1,39 @@
+id: java-backend-standard
+version: 1.0
+
+stack:
+  language: java
+  framework: spring-boot
+  java_version: 17
+  build_tool: maven
+
+architecture:
+  style: hexagonal
+  layers:
+    - domain
+    - application
+    - infrastructure
+    - api
+
+database:
+  enabled: true
+  type: postgresql
+  version: "15"
+
+infra:
+  docker:
+    enabled: true
+  docker_compose:
+    enabled: true
+  observability:
+    prometheus: true
+    grafana: true
+
+quality:
+  openapi: true
+  validation: true
+  tests: unit
+
+conventions:
+  package_root: com.company.app
+  naming: snake_case

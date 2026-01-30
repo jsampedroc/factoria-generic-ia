@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["id", "version", "stack", "architecture"],
+  "properties": {
+    "id": { "type": "string" },
+    "version": { "type": "string" },
+
+    "stack": {
+      "type": "object",
+      "required": ["language", "framework", "java_version"],
+      "properties": {
+        "language": { "type": "string" },
+        "framework": { "type": "string" },
+        "java_version": { "type": "integer" },
+        "build_tool": { "type": "string" }
+      }
+    },
+
+    "architecture": {
+      "type": "object",
+      "properties": {
+        "style": { "type": "string" },
+        "layers": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

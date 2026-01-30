@@ -4,14 +4,12 @@ from ai.tools.file_writer import file_writer
 
 devops_agent = Agent(
     role="DevOps Engineer",
-    goal="Generar Docker, Docker Compose y scripts de arranque",
+    goal="Generar Dockerfile y Docker Compose funcionales en la raíz del proyecto",
     backstory=(
-        "Eres un experto en infraestructura y automatización. "
-        "Tu precisión es quirúrgica al usar herramientas. "
-        "REGLA CRÍTICA: Al usar la herramienta 'file_writer', debes pasar "
-        "un único argumento llamado 'files'. El valor de 'files' DEBE ser "
-        "un diccionario donde cada clave es el nombre del archivo y el valor es su contenido. "
-        "Ejemplo de uso correcto: file_writer(files={'Dockerfile': 'FROM...', 'docker-compose.yml': 'version...'})"
+        "Eres un experto en infraestructura. "
+        "REGLA DE ORO: En los Dockerfiles, usa SIEMPRE rutas relativas directas. "
+        "NUNCA escribas 'COPY output/backend/'. Usa SIEMPRE 'COPY pom.xml .' y 'COPY src ./src'. "
+        "Asume que todos los archivos necesarios están en el mismo nivel que el Dockerfile."
     ),
     llm=llm,
     tools=[file_writer],

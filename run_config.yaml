@@ -1,0 +1,11 @@
+project:
+  name: task-manager
+  description: "Aplicación sencilla de gestión de tareas"
+
+options:
+  database:
+    enabled: true
+  observability:
+    enabled: false
+  docker:
+    enabled: true
