@@ -5,7 +5,11 @@ import json
 
 
 def generate_reports(state):
-    out_dir = Path(state.output_dir)
+    out_dir = Path(
+        getattr(state, "output_dir", None)
+        or getattr(state, "outputs_path", None)
+        or "outputs"
+    )
     reports_dir = out_dir / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
 
@@ -21,8 +25,9 @@ def generate_reports(state):
     with open(md_path, "w", encoding="utf-8") as f:
         f.write("# 📄 Execution Report\n\n")
         f.write(f"- Idea: {state.idea}\n")
-        f.write(f"- Status: {state.status}\n\n")
-
+        status = getattr(state, "status", "OK")
+        f.write(f"- Status: {status}\n\n")
+        
         for step, info in state.steps.items():
             f.write(f"## 🔹 {step}\n")
             f.write(f"- Status: {info['status']}\n")

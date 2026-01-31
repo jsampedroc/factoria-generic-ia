@@ -1,15 +1,14 @@
 from crewai import Agent
-from ai.llm.llm_config import llm
 
-quality_reviewer = Agent(
-    role="Quality Reviewer",
-    goal="Revisar consistencia y calidad de los outputs generados",
-    backstory=(
-        "QA senior.\n"
-        "Detectas inconsistencias.\n"
-        "Propones mejoras estructurales."
-    ),
-    llm=llm,
-    verbose=True,
-    allow_delegation=False,
-)
+def build_quality_reviewer(llm):
+    return Agent(
+        role="Quality Reviewer",
+        goal="Revisar salidas para calidad, coherencia y completitud",
+        backstory=(
+            "Eres un revisor meticuloso. Identificas huecos, inconsistencias y riesgos. "
+            "No inventas hechos; propones preguntas abiertas cuando falta información."
+        ),
+        llm=llm,
+        verbose=True,
+        allow_delegation=False,
+    )

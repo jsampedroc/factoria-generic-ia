@@ -1,4 +1,3 @@
-\
 import json
 import os
 import time
@@ -12,6 +11,12 @@ from crewai import Agent, Task, Crew, Process
 from langchain_openai import ChatOpenAI
 
 from .prompts import load_prompt
+
+# Grounding / RAG
+from ai.llm.grounding import build_grounded_prompt
+from ai.llm.policies import DEFAULT_SYSTEM_RULES
+from ai.rag.retriever import retrieve_context
+
 
 load_dotenv()
 
@@ -259,20 +264,81 @@ def run_pipeline(payload: Dict[str, Any]) -> PipelineResult:
         verbose=False,
     )
 
+
+    verifier = Agent(
+        role="Verifier",
+        goal="Detectar alucinaciones y afirmaciones no verificadas",
+        backstory=(
+            "Eres un auditor estricto. No generas contenido nuevo. "
+            "Solo verificas si las afirmaciones están soportadas por el CONTEXTO."
+        ),
+        llm=llm,
+        verbose=False,
+    )
+
     # Tasks (JSON-only via prompt templates)
     req_prompt = load_prompt(f"requirements_{prompt_version}.md")
     arch_prompt = load_prompt(f"architecture_{prompt_version}.md")
     comp_prompt = load_prompt(f"compliance_{prompt_version}.md")
 
     business_input = payload.get("input", {})
+
+    # ----------------------------
+    # REQUIREMENTS (GROUNDING + RAG + SELF-CHECK)
+    # ----------------------------
+    rag_chunks = retrieve_context(json.dumps(business_input, ensure_ascii=False))
+
+    context_blocks = [
+        json.dumps(business_input, ensure_ascii=False),
+        *[c.get("text", "") for c in rag_chunks],
+    ]
+
+    grounded_req_prompt = build_grounded_prompt(
+        system_rules=DEFAULT_SYSTEM_RULES,
+        context_blocks=context_blocks,
+        task_prompt=req_prompt,
+        output_contract=json.dumps(REQUIREMENTS_SCHEMA, ensure_ascii=False),
+    )
+
     req_task = Task(
-        description=req_prompt + "\n\nINPUT (JSON):\n" + json.dumps(business_input, ensure_ascii=False),
+        description=grounded_req_prompt,
         agent=requirements_analyst,
         expected_output="JSON",
     )
 
     req_crew = Crew(agents=[requirements_analyst], tasks=[req_task], process=Process.sequential)
     requirements = _run_task_with_retry(req_crew, REQUIREMENTS_SCHEMA)
+
+    # Self-check (blocking): verify groundedness of requirements output
+    verify_task = Task(
+        description=(
+            "Verifica que el JSON de REQUIREMENTS solo contiene afirmaciones soportadas por CONTEXT. "
+            "Si algo no está soportado, marca pass=false y añade fix_instructions.\n\n"
+            f"REQUIREMENTS_OUTPUT:\n{json.dumps(requirements, ensure_ascii=False)}\n\n"
+            f"CONTEXT:\n{json.dumps(context_blocks, ensure_ascii=False)}"
+        ),
+        agent=verifier,
+        expected_output="JSON",
+    )
+
+    verify_crew = Crew(agents=[verifier], tasks=[verify_task], process=Process.sequential)
+    verification = _run_task_with_retry(
+        verify_crew,
+        {
+            "type": "object",
+            "required": ["pass", "unverified_claims", "issues", "fix_instructions"],
+            "properties": {
+                "pass": {"type": "boolean"},
+                "unverified_claims": {"type": "array", "items": {"type": "string"}},
+                "issues": {"type": "array", "items": {"type": "string"}},
+                "fix_instructions": {"type": "array", "items": {"type": "string"}},
+            },
+            "additionalProperties": True,
+        },
+    )
+
+    if not verification.get("pass", False):
+        raise RuntimeError(f"Requirements verification failed: {verification}")
 
     arch_task = Task(
         description=arch_prompt + "\n\nREQUIREMENTS (JSON):\n" + json.dumps(requirements, ensure_ascii=False),
