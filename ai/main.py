@@ -8,7 +8,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 from ai.logging import tee_to_file
-from ai.reporting.report_generator import generate_reports
+from ai.reporting.report_generator import generate_report
 
 from ai.llm.llm_config import build_llm
 from ai.agents import (
@@ -23,6 +23,11 @@ from ai.tasks.architecture_task import build_architecture_task
 from ai.tasks.backend_generation_task import build_backend_generation_task
 from ai.tasks.devops_task import build_devops_task
 
+from ai.validators.domain import validate_domain_alignment
+from ai.utils.llm_output import normalize_llm_output
+
+
+# ---------------------------------------------------------------------------
 
 def _ensure_output_dir() -> Path:
     out = Path(os.getenv("FACTORIA_OUTPUT_DIR", "outputs")).resolve()
@@ -40,6 +45,8 @@ def _read_idea_from_cli() -> str:
         return sys.stdin.read().strip()
     return ""
 
+
+# ---------------------------------------------------------------------------
 
 def main() -> int:
     # 1) Cargar .env
@@ -63,7 +70,7 @@ def main() -> int:
     log_file = tee_to_file(log_path)
     print(f"📝 Logging activado en: {log_path}")
 
-    # 4) Importes tardíos (seguros)
+    # 4) Importes tardíos (evitan side-effects)
     from ai.pipeline.state import PipelineState
     from ai.pipeline.decision_engine import DecisionEngine, Decision
     from ai.golden_path.resolver import load_yaml, apply_run_config
@@ -86,18 +93,19 @@ def main() -> int:
         log_file.close()
         return 1
 
-    # 7) Construir LLM + agentes + tasks (sin side-effects al importar)
+    # 7) Construir LLM + agentes
     llm = build_llm()
     domain_reasoner = build_domain_reasoner(llm)
     software_architect = build_software_architect(llm)
     backend_builder = build_backend_builder(llm)
     devops_agent = build_devops_agent(llm)
 
-    domain_model_task = build_domain_model_task(domain_reasoner)
-    architecture_task = build_architecture_task(software_architect)
+    # 8) Construir tasks que NO dependen de outputs previos
+    domain_model_task = build_domain_model_task(idea)
     backend_generation_task = build_backend_generation_task(backend_builder)
     devops_task = build_devops_task(devops_agent)
 
+    # -----------------------------------------------------------------------
     # Helper para ejecutar pasos con retries + feedback
     def run_step(step_name, agent, task, inputs):
         while True:
@@ -105,8 +113,8 @@ def main() -> int:
                 print(f"\n🔹 Ejecutando paso: {step_name}")
                 state.start(step_name)
 
-                # Inyectar inputs en el task (CrewAI Task acepta .context en runtime)
-                task.context = inputs
+                if inputs is not None:
+                    task.context = inputs
 
                 result = agent.execute_task(task)
 
@@ -137,7 +145,7 @@ def main() -> int:
                 print(f"🧠 Decisión: {decision.value}")
 
                 if decision == Decision.RETRY:
-                    inputs = dict(inputs)
+                    inputs = dict(inputs or {})
                     inputs["_retry_context"] = {
                         "step": step_name,
                         "attempt": state.get_retries(step_name),
@@ -149,54 +157,114 @@ def main() -> int:
                 print(f"❌ Abortando pipeline en paso: {step_name}")
                 raise
 
+    # -----------------------------------------------------------------------
     try:
+        # =======================
         # 1) DOMAIN MODEL
-        domain_output = run_step(
+        # =======================
+        raw_domain_output = run_step(
             "domain_model",
             domain_reasoner,
             domain_model_task,
-            {"idea": idea},
+            {},  # la idea ya está embebida en el Task
         )
 
+        domain_output = normalize_llm_output(raw_domain_output)
+        state.domain_model = domain_output
+
+        open_questions = domain_output.get("open_questions", [])
+
+        if open_questions:
+            print("\n🟡 ESTADO: NEEDS_INPUT (DOMAIN)\n")
+            for i, q in enumerate(open_questions, start=1):
+                print(f"{i}. {q}")
+
+            state.status = "NEEDS_INPUT"
+            state.open_questions = open_questions
+
+            generate_report(state)
+            log_file.close()
+            print("\nℹ️ Execution paused. Awaiting additional input.")
+            return 0
+
+        # 🔒 Validación crítica de coherencia del dominio
+        validate_domain_alignment(idea, domain_output)
+
+        # =======================
         # 2) ARCHITECTURE
-        architecture_output = run_step(
+        # =======================
+        architecture_task = build_architecture_task(domain_output)
+
+        raw_architecture_output = run_step(
             "architecture",
             software_architect,
             architecture_task,
-            domain_output,
+            {},  # domain_model embebido en el Task
         )
 
+        architecture_output = normalize_llm_output(raw_architecture_output)
+        state.architecture = architecture_output
+
+        if architecture_output.get("status") == "NEEDS_INPUT":
+            open_q = architecture_output.get("open_questions", [])
+
+            print("\n🟡 ESTADO: NEEDS_INPUT (ARCHITECTURE)\n")
+            for i, q in enumerate(open_q, start=1):
+                print(f"{i}. {q}")
+
+            state.status = "NEEDS_INPUT"
+            state.open_questions = open_q
+
+            generate_report(state)
+            log_file.close()
+            print("\nℹ️ Execution paused. Awaiting additional input.")
+            return 0
+
+        # =======================
         # 3) BACKEND
-        backend_output = run_step(
+        # =======================
+        raw_backend_output = run_step(
             "backend",
             backend_builder,
             backend_generation_task,
             architecture_output,
         )
 
+        backend_output = normalize_llm_output(raw_backend_output)
+        state.backend = backend_output
+
+        # =======================
         # 4) DEVOPS / INFRA
-        infra_output = run_step(
+        # =======================
+        raw_infra_output = run_step(
             "infra",
             devops_agent,
             devops_task,
             backend_output,
         )
 
+        infra_output = normalize_llm_output(raw_infra_output)
+        state.infrastructure = infra_output
+
         print("\n✅ Pipeline completado correctamente")
 
     except Exception:
         print("\n❌ Pipeline finalizado con errores")
+        state.status = "ERROR"
+        generate_report(state)
         log_file.close()
         return 1
 
-    print(f"\n📁 Outputs generados en: {out_dir}")
-
+    # -----------------------------------------------------------------------
     state.finish()
-    generate_reports(state)
+    generate_report(state)
 
+    print(f"\n📁 Outputs generados en: {out_dir}")
     log_file.close()
     return 0
 
+
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     raise SystemExit(main())
