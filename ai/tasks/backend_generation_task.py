@@ -1,15 +1,26 @@
 from crewai import Task
+from ai.prompts import load_prompt
 
-def build_backend_generation_task(backend_builder):
+
+def build_backend_generation_task(architecture: dict) -> Task:
+    """
+    Build the backend generation task embedding the ARCHITECTURE (JSON)
+    directly into the task description to avoid meta-reasoning and template defaults.
+    """
+    prompt = load_prompt("backend.md")
+
+    description = (
+        "You are given a SOFTWARE ARCHITECTURE (JSON) for a SINGLE user application.\n\n"
+        "This is NOT a system description, NOT an AI configuration, and NOT a description of an assistant.\n\n"
+        "SOFTWARE ARCHITECTURE (JSON):\n"
+        "----------------------------------------\n"
+        f"{architecture}\n"
+        "----------------------------------------\n\n"
+        "Generate the backend artifacts based ONLY on the above architecture.\n\n"
+        f"{prompt}"
+    )
+
     return Task(
-        description=(
-            "Genera el código Java Spring Boot completo. "
-            "REGLA DE ORO: Crea TODOS los archivos necesarios para que el proyecto compile, "
-            "incluyendo entidades, repositorios, controladores y EVENTOS. "
-            "Si una clase importa algo, ese algo DEBE ser creado. "
-            "Usa 'file_writer' para guardar los archivos empezando por 'pom.xml' "
-            "y siguiendo con 'src/main/java/...'."
-        ),
-        agent=backend_builder,
-        expected_output="Proyecto Java completo y listo para ser compilado por Maven.",
+        description=description,
+        expected_output="A JSON object strictly following the specified format."
     )

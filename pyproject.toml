@@ -1,0 +1,17 @@
+[project]
+name = "ai-software-factory"
+version = "0.1.0"
+description = "AI-powered software factory for generating enterprise applications"
+authors = [{ name = "Your Name" }]
+requires-python = ">=3.11"
+
+dependencies = [
+  "python-dotenv",
+  "crewai",
+  "langchain",
+  "langchain-community",
+  "langchain-openai",
+]
+
+[project.scripts]
+ai-factory = "ai.main:main"

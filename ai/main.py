@@ -25,6 +25,9 @@ from ai.tasks.devops_task import build_devops_task
 
 from ai.validators.domain import validate_domain_alignment
 from ai.utils.llm_output import normalize_llm_output
+from ai.utils.backend_output import normalize_backend_output
+from ai.cli.interactive import ask_user_questions
+from ai.artifacts.writer import write_artifacts
 
 
 # ---------------------------------------------------------------------------
@@ -36,9 +39,6 @@ def _ensure_output_dir() -> Path:
 
 
 def _read_idea_from_cli() -> str:
-    # Uso:
-    #   python -m ai.main "Mi idea..."
-    #   python -m ai.main < idea.txt
     if len(sys.argv) > 1:
         return " ".join(sys.argv[1:]).strip()
     if not sys.stdin.isatty():
@@ -49,7 +49,6 @@ def _read_idea_from_cli() -> str:
 # ---------------------------------------------------------------------------
 
 def main() -> int:
-    # 1) Cargar .env
     load_dotenv()
 
     idea = _read_idea_from_cli()
@@ -61,52 +60,38 @@ def main() -> int:
         )
         return 2
 
-    # 2) Preparar outputs
     out_dir = _ensure_output_dir()
     os.environ["FACTORIA_OUTPUT_DIR"] = str(out_dir)
 
-    # 3) Logging tipo tee
     log_path = out_dir / f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
     log_file = tee_to_file(log_path)
     print(f"📝 Logging activado en: {log_path}")
 
-    # 4) Importes tardíos (evitan side-effects)
     from ai.pipeline.state import PipelineState
     from ai.pipeline.decision_engine import DecisionEngine, Decision
     from ai.golden_path.resolver import load_yaml, apply_run_config
 
-    # 5) Inicializar estado y motor de decisiones
     state = PipelineState(idea=idea)
     decision_engine = DecisionEngine(max_retries=2)
 
-    # 6) Cargar golden path / run config
     try:
         golden_path = load_yaml(Path("golden_path.yaml"))
         run_config = load_yaml(Path("run_config.yaml"))
-
-        resolved_golden_path = apply_run_config(golden_path, run_config)
-        state.set_context("golden_path", resolved_golden_path)
-        print("🟡 Golden Path cargado y aplicado correctamente")
+        resolved = apply_run_config(golden_path, run_config)
+        state.set_context("golden_path", resolved)
     except Exception as e:
         print("❌ Error cargando Golden Path / Run Config")
         print(str(e))
         log_file.close()
         return 1
 
-    # 7) Construir LLM + agentes
     llm = build_llm()
     domain_reasoner = build_domain_reasoner(llm)
     software_architect = build_software_architect(llm)
     backend_builder = build_backend_builder(llm)
     devops_agent = build_devops_agent(llm)
 
-    # 8) Construir tasks que NO dependen de outputs previos
-    domain_model_task = build_domain_model_task(idea)
-    backend_generation_task = build_backend_generation_task(backend_builder)
-    devops_task = build_devops_task(devops_agent)
-
     # -----------------------------------------------------------------------
-    # Helper para ejecutar pasos con retries + feedback
     def run_step(step_name, agent, task, inputs):
         while True:
             try:
@@ -117,7 +102,6 @@ def main() -> int:
                     task.context = inputs
 
                 result = agent.execute_task(task)
-
                 state.success(step_name, result)
 
                 decision = decision_engine.decide(
@@ -129,7 +113,7 @@ def main() -> int:
                 if decision == Decision.CONTINUE:
                     return result
 
-                raise RuntimeError(f"Decisión inesperada: {decision}")
+                raise RuntimeError(f"Unexpected decision: {decision}")
 
             except Exception as e:
                 state.fail(step_name, e)
@@ -141,9 +125,6 @@ def main() -> int:
                     error=e,
                 )
 
-                print(f"⚠️ Error en {step_name}: {e}")
-                print(f"🧠 Decisión: {decision.value}")
-
                 if decision == Decision.RETRY:
                     inputs = dict(inputs or {})
                     inputs["_retry_context"] = {
@@ -151,120 +132,115 @@ def main() -> int:
                         "attempt": state.get_retries(step_name),
                         "last_error": str(e),
                     }
-                    print(f"🔁 Reintentando {step_name} con feedback...")
                     continue
 
-                print(f"❌ Abortando pipeline en paso: {step_name}")
                 raise
 
-    # -----------------------------------------------------------------------
-    try:
-        # =======================
-        # 1) DOMAIN MODEL
-        # =======================
-        raw_domain_output = run_step(
-            "domain_model",
-            domain_reasoner,
-            domain_model_task,
-            {},  # la idea ya está embebida en el Task
-        )
+    # =======================
+    # PIPELINE LOOP
+    # =======================
+    while True:
+        try:
+            # -----------------------
+            # DOMAIN
+            # -----------------------
+            domain_task = build_domain_model_task(state.idea)
+            raw_domain = run_step("domain_model", domain_reasoner, domain_task, {})
+            domain_output = normalize_llm_output(raw_domain)
+            state.domain_model = domain_output
 
-        domain_output = normalize_llm_output(raw_domain_output)
-        state.domain_model = domain_output
+            open_q = domain_output.get("open_questions", [])
+            if open_q:
+                additional_info = ask_user_questions(open_q)
+                state.idea += "\n\nAdditional information provided:\n" + additional_info
+                continue
 
-        open_questions = domain_output.get("open_questions", [])
+            validate_domain_alignment(state.idea, domain_output)
 
-        if open_questions:
-            print("\n🟡 ESTADO: NEEDS_INPUT (DOMAIN)\n")
-            for i, q in enumerate(open_questions, start=1):
-                print(f"{i}. {q}")
+            # -----------------------
+            # ARCHITECTURE
+            # -----------------------
+            arch_task = build_architecture_task(domain_output)
+            raw_arch = run_step("architecture", software_architect, arch_task, {})
+            architecture_output = normalize_llm_output(raw_arch)
+            state.architecture = architecture_output
 
-            state.status = "NEEDS_INPUT"
-            state.open_questions = open_questions
-
-            generate_report(state)
-            log_file.close()
-            print("\nℹ️ Execution paused. Awaiting additional input.")
-            return 0
-
-        # 🔒 Validación crítica de coherencia del dominio
-        validate_domain_alignment(idea, domain_output)
-
-        # =======================
-        # 2) ARCHITECTURE
-        # =======================
-        architecture_task = build_architecture_task(domain_output)
-
-        raw_architecture_output = run_step(
-            "architecture",
-            software_architect,
-            architecture_task,
-            {},  # domain_model embebido en el Task
-        )
-
-        architecture_output = normalize_llm_output(raw_architecture_output)
-        state.architecture = architecture_output
-
-        if architecture_output.get("status") == "NEEDS_INPUT":
             open_q = architecture_output.get("open_questions", [])
+            if open_q:
+                additional_info = ask_user_questions(open_q)
+                state.idea += "\n\nAdditional information provided:\n" + additional_info
+                continue
 
-            print("\n🟡 ESTADO: NEEDS_INPUT (ARCHITECTURE)\n")
-            for i, q in enumerate(open_q, start=1):
-                print(f"{i}. {q}")
+            # -----------------------
+            # BACKEND (PROFESSIONAL FIX)
+            # -----------------------
+            backend_task = build_backend_generation_task(architecture_output)
+            raw_backend = run_step("backend", backend_builder, backend_task, {})
 
-            state.status = "NEEDS_INPUT"
-            state.open_questions = open_q
+            try:
+                backend_output = normalize_backend_output(raw_backend)
+            except ValueError as e:
+                print("\n⚠️ Backend output invalid. Retrying with stricter constraints...\n")
 
+                backend_task = build_backend_generation_task({
+                    **architecture_output,
+                    "_generation_constraints": {
+                        "require_artifacts": True,
+                        "output_format": "json",
+                        "strict": True,
+                    },
+                })
+
+                raw_backend = run_step("backend", backend_builder, backend_task, {})
+                backend_output = normalize_backend_output(raw_backend)
+
+            state.backend = backend_output
+
+            # -----------------------
+            # WRITE ARTIFACTS
+            # -----------------------
+            artifacts = backend_output.get("artifacts", [])
+            if artifacts:
+                backend_dir = out_dir / "generated"
+                written = write_artifacts(artifacts, backend_dir)
+                state.set_context(
+                    "written_artifacts",
+                    [str(p.relative_to(out_dir)) for p in written],
+                )
+
+            # -----------------------
+            # INFRA
+            # -----------------------
+            devops_task = build_devops_task(devops_agent)
+            raw_infra = run_step("infra", devops_agent, devops_task, backend_output)
+            infra_output = normalize_llm_output(raw_infra)
+            state.infrastructure = infra_output
+
+            open_q = infra_output.get("open_questions", [])
+            if open_q:
+                additional_info = ask_user_questions(open_q)
+                state.idea += "\n\nAdditional information provided:\n" + additional_info
+                continue
+
+            break  # ✅ pipeline completed
+
+        except Exception as e:
+            print("\n❌ Pipeline finalizado con errores técnicos")
+            print(str(e))
+            state.status = "ERROR"
+            state.finish()
             generate_report(state)
             log_file.close()
-            print("\nℹ️ Execution paused. Awaiting additional input.")
-            return 0
+            return 1
 
-        # =======================
-        # 3) BACKEND
-        # =======================
-        raw_backend_output = run_step(
-            "backend",
-            backend_builder,
-            backend_generation_task,
-            architecture_output,
-        )
-
-        backend_output = normalize_llm_output(raw_backend_output)
-        state.backend = backend_output
-
-        # =======================
-        # 4) DEVOPS / INFRA
-        # =======================
-        raw_infra_output = run_step(
-            "infra",
-            devops_agent,
-            devops_task,
-            backend_output,
-        )
-
-        infra_output = normalize_llm_output(raw_infra_output)
-        state.infrastructure = infra_output
-
-        print("\n✅ Pipeline completado correctamente")
-
-    except Exception:
-        print("\n❌ Pipeline finalizado con errores")
-        state.status = "ERROR"
-        generate_report(state)
-        log_file.close()
-        return 1
-
-    # -----------------------------------------------------------------------
+    state.status = "OK"
     state.finish()
     generate_report(state)
-
-    print(f"\n📁 Outputs generados en: {out_dir}")
     log_file.close()
+
+    print(f"\n✅ Pipeline completado. Outputs en: {out_dir}")
     return 0
 
-
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     raise SystemExit(main())

@@ -1,71 +1,121 @@
-from __future__ import annotations
-
-import os
 from pathlib import Path
 from datetime import datetime
-from typing import Any
+import json
+import os
 
 
-def _resolve_output_dir() -> Path:
-    # Prefer the pipeline output dir if provided; fall back to ./outputs
-    out = Path(os.getenv("FACTORIA_OUTPUT_DIR", "outputs")).resolve()
-    out.mkdir(parents=True, exist_ok=True)
-    return out
+def _write_section(f, title: str):
+    f.write("\n")
+    f.write("=" * len(title) + "\n")
+    f.write(title + "\n")
+    f.write("=" * len(title) + "\n\n")
 
 
-def generate_report(state: Any) -> Path:
-    """Write a human-readable report into FACTORIA_OUTPUT_DIR/report.md.
+def generate_report(state):
+    out_dir = Path(os.getenv("FACTORIA_OUTPUT_DIR", "outputs"))
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    The report is intended to exist for:
-    - successful runs
-    - NEEDS_INPUT runs (question-asking)
-    - failed runs (best-effort)
-    """
-    output_dir = _resolve_output_dir()
-    report_path = output_dir / "report.md"
-
-    status = getattr(state, "status", "OK")
-    idea = getattr(state, "idea", None)
+    report_path = out_dir / "report.md"
 
     with report_path.open("w", encoding="utf-8") as f:
-        f.write("# Execution Report\n\n")
-        f.write(f"- Generated at: {datetime.now().isoformat(timespec='seconds')}\n")
-        f.write(f"- Status: {status}\n")
-        if idea:
-            f.write(f"- Idea: {idea}\n")
-        f.write("\n")
+        f.write("# AI Software Factory – Execution Report\n\n")
+        f.write(f"Generated at: {datetime.utcnow().isoformat()} UTC\n\n")
 
-        if status == "NEEDS_INPUT":
-            f.write("## Additional information required\n\n")
+        # -------------------------------------------------
+        # Status
+        # -------------------------------------------------
+        _write_section(f, "Execution Status")
+        f.write(f"**Status:** `{state.status}`\n\n")
+
+        # -------------------------------------------------
+        # Idea
+        # -------------------------------------------------
+        _write_section(f, "User Idea")
+        f.write(state.idea.strip() + "\n\n")
+
+        # -------------------------------------------------
+        # Domain
+        # -------------------------------------------------
+        if getattr(state, "domain_model", None):
+            _write_section(f, "Domain Model")
+            f.write("```json\n")
+            f.write(json.dumps(state.domain_model, indent=2, ensure_ascii=False))
+            f.write("\n```\n")
+
+        # -------------------------------------------------
+        # Architecture
+        # -------------------------------------------------
+        if getattr(state, "architecture", None):
+            _write_section(f, "Architecture")
+            f.write("```json\n")
+            f.write(json.dumps(state.architecture, indent=2, ensure_ascii=False))
+            f.write("\n```\n")
+
+        # -------------------------------------------------
+        # Backend
+        # -------------------------------------------------
+        if getattr(state, "backend", None):
+            _write_section(f, "Backend Design")
+            f.write("```json\n")
+            f.write(json.dumps(state.backend, indent=2, ensure_ascii=False))
+            f.write("\n```\n")
+
+        # -------------------------------------------------
+        # Infrastructure
+        # -------------------------------------------------
+        if getattr(state, "infrastructure", None):
+            _write_section(f, "Infrastructure")
+            f.write("```json\n")
+            f.write(json.dumps(state.infrastructure, indent=2, ensure_ascii=False))
+            f.write("\n```\n")
+
+        # -------------------------------------------------
+        # NEEDS_INPUT
+        # -------------------------------------------------
+        if state.status == "NEEDS_INPUT":
+            _write_section(f, "Action Required")
             f.write(
                 "The execution requires additional information before continuing.\n\n"
             )
-            f.write("Open questions:\n")
-            for q in getattr(state, "open_questions", []) or []:
+            for q in getattr(state, "open_questions", []):
                 f.write(f"- {q}\n")
             f.write("\n")
-            return report_path
 
-        # If there was an error, include it when available
-        err = getattr(state, "last_error", None) or getattr(state, "error", None)
-        if status in ("ERROR", "FAILED") and err:
-            f.write("## Error\n\n")
-            f.write(f"{err}\n\n")
+        # -------------------------------------------------
+        # Generated Artifacts
+        # -------------------------------------------------
+        written = (
+            state.context.get("written_artifacts")
+            if hasattr(state, "context") and state.context
+            else None
+        )
 
-        if hasattr(state, "domain_model"):
-            f.write("## Domain Model\n\n")
-            f.write(f"{getattr(state, 'domain_model')}\n\n")
+        if written:
+            _write_section(f, "Generated Artifacts")
+            f.write(
+                "The following files were generated automatically as part of the "
+                "backend implementation:\n\n"
+            )
+            for p in written:
+                f.write(f"- `{p}`\n")
+            f.write("\n")
 
-        if hasattr(state, "architecture"):
-            f.write("## Architecture\n\n")
-            f.write(f"{getattr(state, 'architecture')}\n\n")
+        # -------------------------------------------------
+        # Errors and Diagnostics
+        # -------------------------------------------------
+        error_fields = ["backend_error", "infra_error"]
+        errors = {k: getattr(state, k) for k in error_fields if hasattr(state, k)}
 
-        if hasattr(state, "backend"):
-            f.write("## Backend\n\n")
-            f.write(f"{getattr(state, 'backend')}\n\n")
+        if errors:
+            _write_section(f, "Errors and Diagnostics")
+            for k, v in errors.items():
+                f.write(f"- **{k}**: {v}\n")
 
-        if hasattr(state, "infrastructure"):
-            f.write("## Infrastructure\n\n")
-            f.write(f"{getattr(state, 'infrastructure')}\n\n")
-
-    return report_path
+        # -------------------------------------------------
+        # Footer
+        # -------------------------------------------------
+        f.write("\n---\n")
+        f.write(
+            "This report was generated by the AI Software Factory pipeline.\n"
+            "It provides a complete, auditable snapshot of the execution state.\n"
+        )
