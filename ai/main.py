@@ -20,6 +20,10 @@ from ai.agents import (
 from ai.tasks.domain_model_task import build_domain_model_task
 from ai.tasks.architecture_task import build_architecture_task
 from ai.tasks.backend_generation_task import build_backend_generation_task
+from ai.tasks.backend_design_task import build_backend_design_task
+
+from ai.validators.backend_design_gate import validate_backend_design_gate
+from ai.validators.backend_design_soft_validator import soft_validate_backend_design
 
 
 # ---------------------------------------------------------------------
@@ -41,14 +45,9 @@ def _read_idea_from_cli() -> str:
 
 
 def normalize_llm_output(output):
-    """
-    Normalize CrewAI / LLM outputs to a plain dict.
-    Handles dict, JSON string, or CrewAI output objects.
-    """
     if isinstance(output, dict):
         return output
 
-    # CrewAI output objects may expose different attributes
     for attr in ("output", "result", "raw"):
         if hasattr(output, attr):
             value = getattr(output, attr)
@@ -61,7 +60,6 @@ def normalize_llm_output(output):
                 except Exception:
                     pass
 
-    # Raw JSON string
     if isinstance(output, str):
         try:
             import json
@@ -69,7 +67,7 @@ def normalize_llm_output(output):
         except Exception:
             pass
 
-    raise RuntimeError(f"Unable to normalize backend output: {type(output)}")
+    raise RuntimeError(f"Unable to normalize LLM output: {type(output)}")
 
 
 # ---------------------------------------------------------------------
@@ -92,7 +90,7 @@ def main() -> int:
     print(f"📝 Logging activado en: {log_path}")
 
     from ai.pipeline.state import PipelineState
-    from ai.pipeline.decision_engine import DecisionEngine
+    from ai.pipeline.decision_engine import DecisionEngine, Decision
 
     state = PipelineState(idea=idea)
     decision_engine = DecisionEngine(max_retries=1)
@@ -109,6 +107,7 @@ def main() -> int:
     domain_model_task = build_domain_model_task(domain_reasoner)
     architecture_task = build_architecture_task(software_architect)
     backend_generation_task = build_backend_generation_task(backend_builder)
+    backend_design_task = build_backend_design_task(backend_builder)
 
     # ---------------------------------------------------------------
     # Runner helper
@@ -116,10 +115,8 @@ def main() -> int:
     def run_step(step_name, agent, task, inputs):
         print(f"\n🔹 Ejecutando paso: {step_name}")
         state.start(step_name)
-
         task.context = inputs
         result = agent.execute_task(task)
-
         state.success(step_name, result)
         return result
 
@@ -145,10 +142,10 @@ def main() -> int:
         )
 
         # -----------------------------------------------------------
-        # 3) BACKEND LEVEL 1 (CONTRACT-ONLY)
+        # 3) BACKEND LEVEL 1 (CONTRACT)
         # -----------------------------------------------------------
         raw_backend_output = run_step(
-            "backend",
+            "backend_contract",
             backend_builder,
             backend_generation_task,
             {
@@ -158,14 +155,95 @@ def main() -> int:
         )
 
         backend_output = normalize_llm_output(raw_backend_output)
-
         backend_contract = backend_output.get("backend_contract")
         if not backend_contract:
             raise RuntimeError("Backend Level 1 missing backend_contract")
 
         state.set_context("backend_contract", backend_contract)
+        print("✅ Backend Level 1 (contract) OK")
 
-        print("\n✅ Backend Level 1 contract generated successfully")
+        # -----------------------------------------------------------
+        # Prepare HARD-BINDING lists
+        # -----------------------------------------------------------
+        allowed_entities = []
+        for e in backend_contract.get("entities", []):
+            if isinstance(e, str):
+                allowed_entities.append(e)
+
+        allowed_modules = []
+        for m in backend_contract.get("modules", []):
+            if isinstance(m, dict) and m.get("name"):
+                allowed_modules.append(m["name"])
+
+        # -----------------------------------------------------------
+        # 4) BACKEND LEVEL 2 (DESIGN – HARD-BOUND)
+        # -----------------------------------------------------------
+        raw_design_output = run_step(
+            "backend_design",
+            backend_builder,
+            backend_design_task,
+            {
+                "backend_contract": backend_contract,
+                "architecture": architecture_output,
+                "allowed_entities": allowed_entities,
+                "allowed_modules": allowed_modules,
+            },
+        )
+
+        design_output = normalize_llm_output(raw_design_output)
+        backend_design = design_output.get("backend_design")
+        if not backend_design:
+            raise RuntimeError("Backend Level 2 missing backend_design")
+
+        # -----------------------------------------------------------
+        # SOFT VALIDATION → propose open_questions (but DO NOT loop)
+        # -----------------------------------------------------------
+        backend_design, soft_questions = soft_validate_backend_design(
+            backend_contract=backend_contract,
+            backend_design=backend_design,
+        )
+
+        # Save updated design (may include open_questions)
+        state.set_context("backend_design", backend_design)
+
+        # -----------------------------------------------------------
+        # ADL Decision Engine: Answer Resolution & NEEDS_INPUT
+        # -----------------------------------------------------------
+        decision = decision_engine.decide(
+            step="backend_design",
+            success=True,
+            retries=0,
+            open_questions=soft_questions,
+            idea=state.idea,  # includes "Decisiones adicionales"
+        )
+
+        if decision == Decision.NEEDS_INPUT:
+            unresolved = decision_engine.last_unresolved_questions
+
+            state.status = "NEEDS_INPUT"
+            state.open_questions = unresolved
+
+            print("\n🟡 ESTADO: NEEDS_INPUT (BACKEND DESIGN)\n")
+            for i, q in enumerate(unresolved, start=1):
+                print(f"{i}. {q}")
+
+            state.finish()
+            generate_report(state)
+            log_file.close()
+            return 0
+
+        # If questions were resolved, continue automatically
+        print("✅ Backend Level 2 (design) OK (questions resolved or none)")
+
+        # -----------------------------------------------------------
+        # HARD ADL GATE
+        # -----------------------------------------------------------
+        validate_backend_design_gate(
+            backend_contract=backend_contract,
+            backend_design=backend_design,
+        )
+
+        print("🔒 ADL Gate passed: backend_design is valid for code generation")
 
     except Exception as e:
         print("\n❌ Pipeline finalizado con errores")
