@@ -21,9 +21,12 @@ from ai.tasks.domain_model_task import build_domain_model_task
 from ai.tasks.architecture_task import build_architecture_task
 from ai.tasks.backend_generation_task import build_backend_generation_task
 from ai.tasks.backend_design_task import build_backend_design_task
+from ai.tasks.backend_code_task import build_backend_code_task
 
 from ai.validators.backend_design_gate import validate_backend_design_gate
 from ai.validators.backend_design_soft_validator import soft_validate_backend_design
+
+from ai.artifacts.writer import write_artifacts
 
 
 # ---------------------------------------------------------------------
@@ -108,6 +111,7 @@ def main() -> int:
     architecture_task = build_architecture_task(software_architect)
     backend_generation_task = build_backend_generation_task(backend_builder)
     backend_design_task = build_backend_design_task(backend_builder)
+    backend_code_task = build_backend_code_task(backend_builder)
 
     # ---------------------------------------------------------------
     # Runner helper
@@ -162,21 +166,17 @@ def main() -> int:
         state.set_context("backend_contract", backend_contract)
         print("✅ Backend Level 1 (contract) OK")
 
-        # -----------------------------------------------------------
-        # Prepare HARD-BINDING lists
-        # -----------------------------------------------------------
-        allowed_entities = []
-        for e in backend_contract.get("entities", []):
-            if isinstance(e, str):
-                allowed_entities.append(e)
-
-        allowed_modules = []
-        for m in backend_contract.get("modules", []):
-            if isinstance(m, dict) and m.get("name"):
-                allowed_modules.append(m["name"])
+        allowed_entities = [
+            e for e in backend_contract.get("entities", []) if isinstance(e, str)
+        ]
+        allowed_modules = [
+            m["name"]
+            for m in backend_contract.get("modules", [])
+            if isinstance(m, dict) and m.get("name")
+        ]
 
         # -----------------------------------------------------------
-        # 4) BACKEND LEVEL 2 (DESIGN – HARD-BOUND)
+        # 4) BACKEND LEVEL 2 (DESIGN)
         # -----------------------------------------------------------
         raw_design_output = run_step(
             "backend_design",
@@ -195,31 +195,23 @@ def main() -> int:
         if not backend_design:
             raise RuntimeError("Backend Level 2 missing backend_design")
 
-        # -----------------------------------------------------------
-        # SOFT VALIDATION → propose open_questions (but DO NOT loop)
-        # -----------------------------------------------------------
         backend_design, soft_questions = soft_validate_backend_design(
             backend_contract=backend_contract,
             backend_design=backend_design,
         )
 
-        # Save updated design (may include open_questions)
         state.set_context("backend_design", backend_design)
 
-        # -----------------------------------------------------------
-        # ADL Decision Engine: Answer Resolution & NEEDS_INPUT
-        # -----------------------------------------------------------
         decision = decision_engine.decide(
             step="backend_design",
             success=True,
             retries=0,
             open_questions=soft_questions,
-            idea=state.idea,  # includes "Decisiones adicionales"
+            idea=state.idea,
         )
 
         if decision == Decision.NEEDS_INPUT:
             unresolved = decision_engine.last_unresolved_questions
-
             state.status = "NEEDS_INPUT"
             state.open_questions = unresolved
 
@@ -232,8 +224,7 @@ def main() -> int:
             log_file.close()
             return 0
 
-        # If questions were resolved, continue automatically
-        print("✅ Backend Level 2 (design) OK (questions resolved or none)")
+        print("✅ Backend Level 2 (design) OK")
 
         # -----------------------------------------------------------
         # HARD ADL GATE
@@ -243,7 +234,43 @@ def main() -> int:
             backend_design=backend_design,
         )
 
-        print("🔒 ADL Gate passed: backend_design is valid for code generation")
+        print("🔒 ADL Gate passed")
+
+        # -----------------------------------------------------------
+        # 5) BACKEND LEVEL 3 (CODE – Spring Boot MVP)
+        # -----------------------------------------------------------
+        raw_code_output = run_step(
+            "backend_code",
+            backend_builder,
+            backend_code_task,
+            {
+                "backend_contract": backend_contract,
+                "backend_design": backend_design,
+                "base_package": "com.factoria.app",
+                "app_name": "daycare",
+                "allowed_entities": allowed_entities,
+                "allowed_modules": allowed_modules,
+            },
+        )
+
+        code_output = normalize_llm_output(raw_code_output)
+        backend_code = code_output.get("backend_code")
+        if not backend_code:
+            raise RuntimeError("Backend Level 3 missing backend_code")
+
+        artifacts = backend_code.get("artifacts", [])
+        if not artifacts:
+            raise RuntimeError("Backend Level 3 returned no artifacts")
+
+        backend_root = out_dir / "generated" / "backend"
+        written = write_artifacts(artifacts, backend_root)
+
+        state.set_context(
+            "written_artifacts",
+            [str(p.relative_to(out_dir)) for p in written],
+        )
+
+        print(f"✅ Backend written to: {backend_root}")
 
     except Exception as e:
         print("\n❌ Pipeline finalizado con errores")

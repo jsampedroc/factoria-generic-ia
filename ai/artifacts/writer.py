@@ -1,37 +1,52 @@
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Iterable, Dict, List
+from typing import Iterable, List, Dict, Any
 
 
-def write_artifacts(
-    artifacts: Iterable[Dict[str, str]],
-    base_dir: Path,
-) -> List[Path]:
+class ArtifactWriteError(RuntimeError):
+    pass
+
+
+def _safe_join(root: Path, rel_path: str) -> Path:
+    rel = rel_path.replace("\\", "/").strip()
+
+    if rel.startswith("/"):
+        raise ArtifactWriteError(f"Artifact path must be relative, got: {rel_path}")
+    if ".." in rel.split("/"):
+        raise ArtifactWriteError(f"Artifact path must not contain '..', got: {rel_path}")
+
+    target = (root / rel).resolve()
+    root_resolved = root.resolve()
+
+    if root_resolved not in target.parents and target != root_resolved:
+        raise ArtifactWriteError(f"Artifact path escapes root: {rel_path}")
+
+    return target
+
+
+def write_artifacts(artifacts: Iterable[Dict[str, Any]], target_dir: Path) -> List[Path]:
     """
-    Writes backend artifacts to disk.
-
-    Each artifact must have:
-      - path: relative file path
-      - content: file content
-
-    Files are written under base_dir.
-    Existing files are overwritten.
+    Writes artifacts to target_dir safely.
+    Each artifact must be: {"path": str, "content": str}
+    Returns list of written file paths.
     """
+    target_dir.mkdir(parents=True, exist_ok=True)
 
     written: List[Path] = []
 
-    base_dir.mkdir(parents=True, exist_ok=True)
-
-    for artifact in artifacts:
-        rel_path = artifact.get("path")
-        content = artifact.get("content")
-
-        if not rel_path or content is None:
-            # Skip invalid artifact silently
+    for a in artifacts:
+        if not isinstance(a, dict):
             continue
 
-        file_path = base_dir / rel_path
-        file_path.parent.mkdir(parents=True, exist_ok=True)
+        rel_path = a.get("path")
+        content = a.get("content")
 
+        if not isinstance(rel_path, str) or not isinstance(content, str):
+            continue
+
+        file_path = _safe_join(target_dir, rel_path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(content, encoding="utf-8")
         written.append(file_path)
 
