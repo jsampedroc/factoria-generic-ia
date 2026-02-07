@@ -100,3 +100,21 @@ without relying on assumptions or system-level reasoning?”
 If the answer is NOT a clear YES:
 - DO NOT generate a domain model
 - OUTPUT ONLY open_questions
+
+CRITICAL JSON RULES (MANDATORY):
+
+- Output MUST be valid JSON (RFC 8259).
+- Do NOT include comments.
+- Do NOT include trailing commas.
+- Do NOT include markdown or explanations.
+- Escape all quotes inside strings.
+- Multiline code MUST be inside JSON strings.
+
+If you cannot comply, output exactly:
+
+<<<JSON>>>
+{
+  "status": "NEEDS_INPUT",
+  "open_questions": ["Unable to generate valid JSON safely."]
+}
+<<<END_JSON>>>

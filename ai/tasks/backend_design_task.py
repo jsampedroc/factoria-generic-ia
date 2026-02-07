@@ -1,24 +1,30 @@
+from __future__ import annotations
+
+import json
 from crewai import Task
 
 
-def build_backend_design_task(backend_agent):
+def build_backend_design_task(
+    backend_agent,
+    *,
+    backend_contract: dict,
+    architecture: dict,
+    allowed_entities: list[str],
+    allowed_modules: list[str],
+) -> Task:
     """
     Backend Design – Level 2 (ADL / Design-only, HARD-BOUND)
 
-    INPUT (task.context):
-    - backend_contract: dict
-    - architecture: dict
-    - allowed_entities: list[str]   (SOURCE OF TRUTH)
-    - allowed_modules: list[str]    (SOURCE OF TRUTH)
-
-    OUTPUT (STRICT JSON ONLY):
-    { "backend_design": { ... } }
-
-    NOTE:
-    - NO code, NO artifacts
+    Inputs are embedded to avoid CrewAI context typing issues.
+    Output: VALID JSON with only {"backend_design": {...}}.
     """
 
-    description = """
+    contract_json = json.dumps(backend_contract, ensure_ascii=False, indent=2)
+    arch_json = json.dumps(architecture, ensure_ascii=False, indent=2)
+    allowed_entities_json = json.dumps(allowed_entities, ensure_ascii=False, indent=2)
+    allowed_modules_json = json.dumps(allowed_modules, ensure_ascii=False, indent=2)
+
+    description = f"""
 You are a Senior Backend Architect operating under an Agentic Development Lifecycle (ADL)
 within an Enterprise Multi-Agent Orchestration (EMAO).
 
@@ -30,10 +36,15 @@ Produce a BACKEND DESIGN (technical blueprint), NOT code and NOT files.
 ========================
 HARD BINDING (MANDATORY)
 ========================
-You MUST use ONLY the following lists as SOURCE OF TRUTH:
+SOURCE OF TRUTH:
+- allowed_entities (ONLY allowed domain entities)
+- allowed_modules (ONLY allowed module names)
 
-- allowed_entities: the ONLY allowed domain entities
-- allowed_modules: the ONLY allowed module names
+allowed_entities:
+{allowed_entities_json}
+
+allowed_modules:
+{allowed_modules_json}
 
 RULES:
 1) You MUST NOT introduce any entity outside allowed_entities.
@@ -42,16 +53,20 @@ RULES:
 4) Modules MUST use the EXACT same names as allowed_modules.
 
 If you cannot comply, output ONLY:
-{ "backend_design": { "open_questions": ["Unable to comply with allowed_entities/allowed_modules"] } }
+{{ "backend_design": {{ "open_questions": ["Unable to comply with allowed_entities/allowed_modules"] }} }}
 
 ========================
-INPUTS
+INPUTS (EMBEDDED)
 ========================
-You will also receive:
-- backend_contract (Level 1 output): structure + responsibilities
-- architecture: stack and style guidance
+BACKEND CONTRACT (Level 1):
+----------------------------------------
+{contract_json}
+----------------------------------------
 
-You MUST derive the design strictly from those inputs AND the hard-binding lists above.
+ARCHITECTURE:
+----------------------------------------
+{arch_json}
+----------------------------------------
 
 ========================
 STRICT OUTPUT RULES
@@ -72,33 +87,33 @@ STACK (MANDATORY)
 ========================
 OUTPUT FORMAT (STRICT)
 ========================
-{
-  "backend_design": {
-    "project": {
+{{
+  "backend_design": {{
+    "project": {{
       "language": "Java",
       "framework": "Spring Boot",
       "java_version": "17",
       "build_tool": "Maven",
       "packaging": "jar"
-    },
+    }},
     "modules": [
-      {
+      {{
         "name": "string (must be in allowed_modules)",
         "responsibility": "string",
         "entities": ["EntityA (must be in allowed_entities)"]
-      }
+      }}
     ],
     "entities": [
-      {
+      {{
         "name": "EntityName (must be in allowed_entities)",
         "table": "snake_case_table",
         "id_type": "UUID",
         "fields": [
-          {"name": "id", "type": "UUID", "required": true},
-          {"name": "createdAt", "type": "Instant", "required": true},
-          {"name": "updatedAt", "type": "Instant", "required": true}
+          {{"name": "id", "type": "UUID", "required": true}},
+          {{"name": "createdAt", "type": "Instant", "required": true}},
+          {{"name": "updatedAt", "type": "Instant", "required": true}}
         ]
-      }
+      }}
     ],
     "relationships": [],
     "dtos": [],
@@ -106,19 +121,16 @@ OUTPUT FORMAT (STRICT)
     "services": [],
     "controllers": [],
     "endpoints": [],
-    "config": {
-      "database": { "type": "PostgreSQL", "migration_tool": "Flyway" }
-    },
+    "config": {{
+      "database": {{ "type": "PostgreSQL", "migration_tool": "Flyway" }}
+    }},
     "assumptions": [],
     "open_questions": []
-  }
-}
+  }}
+}}
 """
 
-    expected_output = """
-A VALID JSON object with ONLY:
-{ "backend_design": { ... } }
-"""
+    expected_output = 'VALID JSON ONLY: { "backend_design": { ... } }'
 
     return Task(
         description=description,

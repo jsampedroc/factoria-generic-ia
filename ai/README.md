@@ -22,5 +22,5 @@ Los archivos generados se escriben en `output/` (por defecto).
 - `agents/`: definiciones de agentes (core)
 - `tasks/`: tareas que ejecuta el crew
 - `workflows/`: composición de tareas por modo
-- `tools/`: utilidades (p.ej. `file_writer`)
+- `tools/`: utilidades (p.ej. `artifacts writer`)
 - `orchestration/`: factory para construir el crew

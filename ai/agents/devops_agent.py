@@ -1,18 +1,20 @@
 from crewai import Agent
-from ai.tools.file_writer import file_writer
+
 
 def build_devops_agent(llm):
     return Agent(
         role="DevOps Engineer",
-        goal="Generar Dockerfile y Docker Compose funcionales en la raíz del proyecto",
+        goal=(
+            "Generar artefactos de infraestructura (Dockerfile, docker-compose, CI) "
+            "como contenido en JSON, sin escribir archivos directamente."
+        ),
         backstory=(
             "Eres un experto en infraestructura. "
-            "REGLA DE ORO: En los Dockerfiles, usa SIEMPRE rutas relativas directas. "
-            "NUNCA escribas 'COPY output/backend/'. Usa SIEMPRE 'COPY pom.xml .' y 'COPY src ./src'. "
-            "Asume que todos los archivos necesarios están en el mismo nivel que el Dockerfile."
+            "Devuelves siempre JSON con artifacts (path + content). "
+            "NO escribas archivos en disco."
         ),
         llm=llm,
-        tools=[file_writer],
+        tools=[],
         verbose=True,
         allow_delegation=False,
     )

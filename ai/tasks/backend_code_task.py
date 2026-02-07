@@ -1,31 +1,32 @@
+from __future__ import annotations
+
+import json
 from crewai import Task
 
 
-def build_backend_code_task(backend_agent):
+def build_backend_code_task(
+    backend_agent,
+    *,
+    backend_contract: dict,
+    backend_design: dict,
+    base_package: str,
+    app_name: str,
+    allowed_entities: list[str],
+    allowed_modules: list[str],
+) -> Task:
     """
     Backend Code – Level 3 (ADL / MVP enterprise)
 
-    Input (task.context):
-      - backend_contract (dict)
-      - backend_design (dict)
-      - base_package (str)  e.g. "com.factoria.app"
-      - app_name (str)      e.g. "daycare"
-      - allowed_entities (list[str])  HARD BIND
-      - allowed_modules (list[str])   HARD BIND
-
-    Output (STRICT JSON ONLY):
-    {
-      "backend_code": {
-        "root_dir": "backend",
-        "base_package": "...",
-        "artifacts": [{"path": "...", "content": "..."}],
-        "assumptions": [],
-        "open_questions": []
-      }
-    }
+    Inputs are embedded to avoid CrewAI context typing issues.
+    Output: VALID JSON with only {"backend_code": {...}}.
     """
 
-    description = """
+    contract_json = json.dumps(backend_contract, ensure_ascii=False, indent=2)
+    design_json = json.dumps(backend_design, ensure_ascii=False, indent=2)
+    allowed_entities_json = json.dumps(allowed_entities, ensure_ascii=False, indent=2)
+    allowed_modules_json = json.dumps(allowed_modules, ensure_ascii=False, indent=2)
+
+    description = f"""
 You are a Senior Backend Engineer operating under an Agentic Development Lifecycle (ADL)
 within an Enterprise Multi-Agent Orchestration (EMAO).
 
@@ -33,7 +34,7 @@ within an Enterprise Multi-Agent Orchestration (EMAO).
 GOAL (LEVEL 3 ONLY)
 ========================
 Generate a COMPLETE Spring Boot backend MVP (enterprise skeleton) as FILE ARTIFACTS.
-You MUST NOT output markdown. You MUST output VALID JSON ONLY.
+You MUST output VALID JSON ONLY.
 
 The generated project MUST be runnable with:
 - Java 17
@@ -45,9 +46,11 @@ The generated project MUST be runnable with:
 ========================
 HARD BINDING (MANDATORY)
 ========================
-You will receive:
-- allowed_entities: the ONLY allowed entity names
-- allowed_modules: the ONLY allowed module names
+allowed_entities:
+{allowed_entities_json}
+
+allowed_modules:
+{allowed_modules_json}
 
 RULES:
 1) You MUST NOT introduce any entity outside allowed_entities.
@@ -56,11 +59,20 @@ RULES:
 4) Do NOT invent extra domain concepts.
 
 ========================
-INPUT SOURCE OF TRUTH
+INPUT SOURCE OF TRUTH (EMBEDDED)
 ========================
-- backend_design is the primary source for entities, fields, endpoints, services, packages.
-- backend_contract provides boundaries and responsibilities.
-- base_package is mandatory and MUST be used for Java packages.
+BACKEND CONTRACT (Level 1):
+----------------------------------------
+{contract_json}
+----------------------------------------
+
+BACKEND DESIGN (Level 2):
+----------------------------------------
+{design_json}
+----------------------------------------
+
+base_package: {base_package}
+app_name: {app_name}
 
 ========================
 STRICT OUTPUT RULES
@@ -68,7 +80,7 @@ STRICT OUTPUT RULES
 1) Output MUST be VALID JSON ONLY.
 2) Output MUST contain ONLY ONE top-level key: "backend_code".
 3) backend_code.root_dir MUST be exactly "backend".
-4) backend_code.artifacts MUST be a list of objects {path, content}.
+4) backend_code.artifacts MUST be a list of objects {{path, content}}.
 5) Each artifact.path MUST be:
    - relative (no leading "/")
    - MUST NOT contain ".."
@@ -79,7 +91,6 @@ STRICT OUTPUT RULES
        - "src/main/java/"
        - "src/main/resources/"
        - "src/test/java/"
-6) DO NOT use file writing tools. Only return artifacts.
 
 ========================
 MANDATORY FILES
@@ -95,56 +106,41 @@ B) Spring Boot app:
 - src/main/java/<base_package_path>/Application.java
 
 C) Layers (enterprise skeleton):
-- api/controller/*Controller.java (based on backend_design.controllers/endpoints)
-- application/service/*Service.java (+ impl if you prefer)
-- domain/model/* (JPA entities for allowed_entities)
-- infrastructure/persistence/*Repository.java (Spring Data JPA)
-- config/JpaConfig.java (optional minimal)
-- config/SecurityConfig.java (minimal allow-all OR basic placeholder; keep simple)
+- api/controller/*Controller.java
+- application/service/*Service.java
+- domain/model/* (JPA entities)
+- infrastructure/persistence/*Repository.java
+- config/SecurityConfig.java (minimal placeholder)
 
 D) Resources:
 - src/main/resources/application.yml
 - src/main/resources/application-dev.yml
-- src/main/resources/db/migration/V1__init.sql (Flyway baseline minimal)
+- src/main/resources/db/migration/V1__init.sql
 
 E) Tests (smoke):
 - src/test/java/<base_package_path>/ApplicationContextTest.java
 
 ========================
-QUALITY RULES
-========================
-- Keep code minimal but clean and compilable.
-- Use UUID ids, Instant timestamps.
-- JPA annotations correctly.
-- Validation annotations where obvious.
-- REST controllers return ResponseEntity.
-- No complex business logic (Level 3 MVP).
-
-========================
 OUTPUT FORMAT (STRICT)
 ========================
-{
-  "backend_code": {
+{{
+  "backend_code": {{
     "root_dir": "backend",
-    "base_package": "com.example.app",
+    "base_package": "{base_package}",
     "artifacts": [
-      {"path": "pom.xml", "content": "..."},
-      {"path": "src/main/java/com/example/app/Application.java", "content": "..."}
+      {{"path": "pom.xml", "content": "..."}}
     ],
     "assumptions": [],
     "open_questions": []
-  }
-}
+  }}
+}}
 
 FAILURE MODE:
 If you cannot comply, output ONLY:
-{ "backend_code": { "root_dir": "backend", "base_package": "", "artifacts": [], "open_questions": ["Unable to generate backend MVP artifacts from input"] } }
+{{ "backend_code": {{ "root_dir": "backend", "base_package": "", "artifacts": [], "open_questions": ["Unable to generate backend MVP artifacts from input"] }} }}
 """
 
-    expected_output = """
-VALID JSON ONLY:
-{ "backend_code": { "root_dir":"backend", "base_package":"...", "artifacts":[...], "assumptions":[], "open_questions":[] } }
-"""
+    expected_output = 'VALID JSON ONLY: { "backend_code": { "root_dir": "backend", "base_package": "...", "artifacts": [...], "assumptions": [], "open_questions": [] } }'
 
     return Task(
         description=description,

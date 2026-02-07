@@ -1,53 +1,29 @@
-from __future__ import annotations
-from typing import Any, Dict
-from datetime import datetime
+# ai/pipeline/state.py
 
+from typing import Any, List, Optional
+
+
+from pathlib import Path
 
 class PipelineState:
-    """
-    Estado central del pipeline.
-    Guarda resultados, errores, retries y contexto global.
-    """
-
-    def __init__(self, idea: str):
+    def __init__(self, idea: str, output_dir: Path):
         self.idea = idea
-        self.context: Dict[str, Any] = {}
-        self.steps: Dict[str, Dict[str, Any]] = {}
-        self.started_at = datetime.utcnow().isoformat()
-        self.finished_at: str | None = None
+        self.output_dir = output_dir
 
-    def start(self, step: str) -> None:
-        self.steps.setdefault(step, {
-            "status": "pending",
-            "retries": 0,
-            "output": None,
-            "error": None,
-        })
-        self.steps[step]["status"] = "running"
+        self.domain_model = None
+        self.architecture = None
+        self.backend = None
 
-    def success(self, step: str, output: Any) -> None:
-        self.steps[step]["status"] = "success"
-        self.steps[step]["output"] = output
+        self.status = None
+        self.open_questions = []
+        self.errors = []
 
-    def fail(self, step: str, error: Exception | str) -> None:
-        self.steps[step]["status"] = "failed"
-        self.steps[step]["error"] = str(error)
-        self.steps[step]["retries"] += 1
+    # Helpers explícitos (evitan bugs silenciosos)
+    def set_status(self, status: str):
+        self.status = status
 
-    def get_retries(self, step: str) -> int:
-        return self.steps.get(step, {}).get("retries", 0)
+    def add_open_questions(self, questions: List[str]):
+        self.open_questions.extend(questions)
 
-    def set_context(self, key: str, value: Any) -> None:
-        self.context[key] = value
-
-    def finish(self) -> None:
-        self.finished_at = datetime.utcnow().isoformat()
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "idea": self.idea,
-            "context": self.context,
-            "steps": self.steps,
-            "started_at": self.started_at,
-            "finished_at": self.finished_at,
-        }
+    def add_error(self, error: str):
+        self.errors.append(error)

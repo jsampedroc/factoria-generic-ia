@@ -1,18 +1,20 @@
 from crewai import Agent
-from ai.tools.file_writer import file_writer
+
 
 def build_backend_builder(llm):
     return Agent(
         role="Backend Builder",
-        goal="Generar un proyecto backend Java/Spring Boot siguiendo el plan establecido",
+        goal=(
+            "Generar especificaciones y/o artefactos backend Java/Spring Boot en JSON, "
+            "sin escribir archivos directamente."
+        ),
         backstory=(
-            "Eres un experto programador Java. Tu única misión es escribir el código. "
-            "REGLA DE ORO: Para escribir archivos, usa la herramienta 'file_writer' "
-            "siempre con el argumento 'files'. "
-            "No des explicaciones, solo genera los archivos necesarios."
+            "Eres un Tech Lead de Backend (Java 17, Spring Boot). "
+            "Respondes siguiendo estrictamente el contrato de salida solicitado por cada task. "
+            "NO escribas archivos en disco; devuelve siempre JSON (p.ej. {artifacts:[...]})."
         ),
         llm=llm,
-        tools=[file_writer],
+        tools=[],
         verbose=True,
         allow_delegation=False,
     )
