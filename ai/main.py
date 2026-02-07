@@ -19,7 +19,6 @@ from ai.tasks.architecture_task import build_architecture_task
 from ai.tasks.backend_generation_task import build_backend_generation_task
 
 from ai.pipeline.state import PipelineState
-
 from ai.llm.llm_config import build_llm
 
 
@@ -43,7 +42,7 @@ def main() -> int:
     tee = tee_to_file(log_path)
 
     state = PipelineState(idea, out_dir)
-    
+
     llm = build_llm()
 
     try:
@@ -90,13 +89,21 @@ def main() -> int:
         state.backend = backend_output
 
         # -----------------------
-        # WRITE ARTIFACTS (SAFE)
+        # WRITE ARTIFACTS
         # -----------------------
         artifacts = backend_output.get("artifacts", [])
         if isinstance(artifacts, list) and artifacts:
-            backend_dir = out_dir / "generated" / "backend"
+            backend_dir = (out_dir / "generated" / "backend").resolve()
+
             written = write_artifacts(artifacts, backend_dir)
-            state.written_artifacts = [str(p.relative_to(out_dir)) for p in written]
+
+            out_dir_resolved = out_dir.resolve()
+
+            state.written_artifacts = [
+                str(p.resolve().relative_to(out_dir_resolved))
+                for p in written
+                if p.resolve().is_relative_to(out_dir_resolved)
+            ]
 
         # -----------------------
         # FINAL REPORT
