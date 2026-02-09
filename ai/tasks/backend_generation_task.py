@@ -1,27 +1,33 @@
 from crewai import Task
 import json
 
-def build_backend_generation_task(agent, domain_model: dict, architecture: dict) -> Task:
-    # Simplificamos el contexto para no saturar la ventana de salida
-    entities = [e.get('name') for e in domain_model.get('core_entities', [])]
-    
+def build_single_file_task(agent, file_path: str, domain_model: dict, architecture: dict) -> Task:
+    """
+    Crea una tarea para generar el contenido de UN SOLO archivo específico.
+    """
     description = f"""
-    Generate the core Spring Boot 3 backend for: {domain_model.get('domain_name')}.
-    Entities to implement: {', '.join(entities)}
-
-    OUTPUT INSTRUCTIONS:
-    1. You must return a JSON with an "artifacts" array.
-    2. Focus ONLY on the most critical files to avoid truncation:
-       - pom.xml
-       - Dockerfile
-       - Main Application class
-       - One Entity, one Repository and one Controller as a baseline.
+    You are an Expert Java Developer. Generate the content for the following file:
+    FILE PATH: {file_path}
     
-    Each artifact must have 'path' and 'content'.
+    CONTEXT:
+    Domain: {domain_model.get('domain_name')}
+    Architecture: {architecture.get('architecture_overview')}
+    
+    REQUIREMENTS:
+    1. Write high-quality, production-ready Java 17 code.
+    2. Use Spring Boot 3 standards.
+    3. Ensure the code is consistent with the provided domain model.
+
+    OUTPUT FORMAT:
+    Return ONLY a JSON object with:
+    {{
+      "path": "{file_path}",
+      "content": "... (the full source code) ..."
+    }}
     """
 
     return Task(
         description=description,
-        expected_output="JSON with an 'artifacts' array containing core files.",
+        expected_output=f"A JSON with the path and the complete content for {file_path}",
         agent=agent
     )
