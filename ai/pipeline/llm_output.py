@@ -1,49 +1,31 @@
 import json
 import re
-from typing import Any, Dict
 
+def normalize_llm_output(raw_output: str) -> dict:
+    if not raw_output:
+        return {"status": "ERROR", "message": "Empty output"}
 
-def normalize_llm_output(raw_output: Any) -> Dict[str, Any]:
-    """
-    Robust LLM output normalization.
-    Never raises JSON errors.
-    """
+    # Eliminar bloques de código markdown si existen
+    cleaned = re.sub(r'```json\s*', '', raw_output)
+    cleaned = re.sub(r'```\s*$', '', cleaned)
+    cleaned = cleaned.strip()
 
-    if raw_output is None:
-        return {
-            "status": "NEEDS_INPUT",
-            "error": "EMPTY_OUTPUT",
-            "raw_output": "",
-        }
+    # Si el JSON está truncado (no cierra con }), intentamos cerrarlo mínimamente
+    # para que al menos no rompa el script, aunque los datos estén incompletos.
+    if cleaned.startswith('{') and not cleaned.endswith('}'):
+        cleaned += '"}]}' # Intento de cierre de emergencia para el array de artifacts
 
-    if isinstance(raw_output, dict):
-        return raw_output
-
-    text = str(raw_output).strip()
-
-    # 1️⃣ Try direct JSON
     try:
-        return json.loads(text)
-    except Exception:
-        pass
-
-    # 2️⃣ Try extracting first JSON object
-    match = re.search(r"\{[\s\S]*\}", text)
-    if match:
-        candidate = match.group(0)
-        try:
-            return json.loads(candidate)
-        except Exception as e:
-            return {
-                "status": "NEEDS_INPUT",
-                "error": "INVALID_JSON",
-                "message": str(e),
-                "raw_output": candidate[:4000],
-            }
-
-    # 3️⃣ Fallback: no JSON at all
-    return {
-        "status": "NEEDS_INPUT",
-        "error": "NO_JSON_FOUND",
-        "raw_output": text[:4000],
-    }
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        # Intento final: buscar el primer { y el último }
+        start = cleaned.find('{')
+        end = cleaned.rfind('}')
+        if start != -1 and end != -1:
+            try:
+                return json.loads(cleaned[start:end+1])
+            except:
+                pass
+        
+        print(f"⚠️ Error crítico de formato. Longitud: {len(raw_output)} chars.")
+        return {"status": "ERROR", "raw_payload": raw_output}

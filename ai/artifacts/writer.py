@@ -1,53 +1,48 @@
-from __future__ import annotations
-
 from pathlib import Path
-from typing import Iterable, List, Dict, Any
+from typing import List, Dict
 
-
-class ArtifactWriteError(RuntimeError):
-    pass
-
-
-def _safe_join(root: Path, rel_path: str) -> Path:
-    rel = rel_path.replace("\\", "/").strip()
-
-    if rel.startswith("/"):
-        raise ArtifactWriteError(f"Artifact path must be relative, got: {rel_path}")
-    if ".." in rel.split("/"):
-        raise ArtifactWriteError(f"Artifact path must not contain '..', got: {rel_path}")
-
-    target = (root / rel).resolve()
-    root_resolved = root.resolve()
-
-    if root_resolved not in target.parents and target != root_resolved:
-        raise ArtifactWriteError(f"Artifact path escapes root: {rel_path}")
-
-    return target
-
-
-def write_artifacts(artifacts: Iterable[Dict[str, Any]], target_dir: Path) -> List[Path]:
+def write_artifacts(artifacts: List[Dict[str, str]], base_dir: Path) -> List[Path]:
     """
-    Writes artifacts to target_dir safely.
-    Each artifact must be: {"path": str, "content": str}
-    Returns list of written file paths.
+    Escribe los artefactos generados en disco, creando las subcarpetas necesarias.
+    Cada artefacto debe ser: {"path": "ruta/al/archivo.py", "content": "..."}
     """
-    target_dir.mkdir(parents=True, exist_ok=True)
+    written_files = []
+    
+    if not artifacts:
+        print("⚠️ No hay artefactos para escribir.")
+        return written_files
 
-    written: List[Path] = []
+    # Asegurar que el directorio base existe
+    base_dir.mkdir(parents=True, exist_ok=True)
 
-    for a in artifacts:
-        if not isinstance(a, dict):
+    for artifact in artifacts:
+        rel_path = artifact.get("path")
+        content = artifact.get("content", "")
+
+        if not rel_path:
             continue
 
-        rel_path = a.get("path")
-        content = a.get("content")
-
-        if not isinstance(rel_path, str) or not isinstance(content, str):
+        # Crear la ruta completa del archivo
+        file_path = (base_dir / rel_path).resolve()
+        
+        # Seguridad: Evitar escribir fuera del base_dir (Path Traversal)
+        if not str(file_path).startswith(str(base_dir.resolve())):
+            print(f"🚫 Intento de escritura fuera de rango saltado: {rel_path}")
             continue
 
-        file_path = _safe_join(target_dir, rel_path)
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_text(content, encoding="utf-8")
-        written.append(file_path)
+        try:
+            # 1. CREAR CARPETAS PADRE (Crítico para Java/Spring Boot)
+            file_path.parent.mkdir(parents=True, exist_ok=True)
 
-    return written
+            # 2. ESCRIBIR CONTENIDO
+            # Usamos utf-8 para evitar errores en Windows/Unix
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            
+            written_files.append(file_path)
+            print(f"📄 Escrito: {rel_path}")
+
+        except Exception as e:
+            print(f"❌ Error escribiendo {rel_path}: {e}")
+
+    return written_files

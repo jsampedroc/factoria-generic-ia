@@ -1,28 +1,28 @@
 from crewai import Task
-from ai.prompts import load_prompt
+import json
 
-
-def build_domain_model_task(idea: str) -> Task:
+def build_domain_model_task(agent, idea: str) -> Task:
     """
-    Build the domain modeling task with the USER APPLICATION IDEA
-    embedded directly in the task description, to avoid meta-reasoning.
+    Crea la tarea de descubrimiento de dominio usando la clase oficial de CrewAI.
     """
-    prompt = load_prompt("domain_model.md")
+    # En CrewAI, el 'description' actúa como el prompt principal
+    description = f"""
+    Analyze the following business idea and extract a formal Domain Model.
+    IDEA: {idea}
 
-    description = (
-        "You are given a USER APPLICATION IDEA.\n\n"
-        "This is NOT a system description, NOT an AI configuration, "
-        "and NOT a description of an assistant.\n\n"
-        "USER APPLICATION IDEA:\n"
-        "----------------------------------------\n"
-        f"{idea}\n"
-        "----------------------------------------\n\n"
-        "Based ONLY on the above idea, perform domain modeling "
-        "according to the following rules and constraints:\n\n"
-        f"{prompt}"
-    )
+    Your goal is to identify:
+    - The name of the domain.
+    - Core business entities (singular, PascalCase).
+    - Key use cases.
+    - Assumptions made.
+    - Any open questions.
+
+    STRICT OUTPUT FORMAT:
+    You must return a valid JSON object.
+    """
 
     return Task(
         description=description,
-        expected_output="A JSON object strictly following the specified format."
+        expected_output="A JSON object containing: domain_name, core_entities, key_use_cases, assumptions, and open_questions.",
+        agent=agent
     )
