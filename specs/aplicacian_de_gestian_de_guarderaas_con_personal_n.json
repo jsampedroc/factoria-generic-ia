@@ -1,0 +1,253 @@
+{
+  "domain_name": "Daycare Management",
+  "core_entities": [
+    {
+      "name": "Child",
+      "description": "Represents a child enrolled in the daycare, including personal details, enrollment status, and associated guardians.",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "description": "Unique identifier for the child."
+        },
+        {
+          "name": "firstName",
+          "type": "String",
+          "description": "Legal first name of the child."
+        },
+        {
+          "name": "lastName",
+          "type": "String",
+          "description": "Legal last name of the child."
+        },
+        {
+          "name": "dateOfBirth",
+          "type": "Date",
+          "description": "Child's date of birth for age verification and grouping."
+        },
+        {
+          "name": "enrollmentDate",
+          "type": "Date",
+          "description": "Date when the child was officially enrolled."
+        },
+        {
+          "name": "status",
+          "type": "Enum",
+          "description": "Current enrollment status (e.g., Active, Inactive, Waitlisted)."
+        },
+        {
+          "name": "medicalNotes",
+          "type": "String",
+          "description": "Optional field for allergies, medications, or special medical needs."
+        }
+      ]
+    },
+    {
+      "name": "Guardian",
+      "description": "Represents a parent or legal guardian responsible for a child, handling contact and payment authorization.",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "description": "Unique identifier for the guardian."
+        },
+        {
+          "name": "firstName",
+          "type": "String",
+          "description": "First name of the guardian."
+        },
+        {
+          "name": "lastName",
+          "type": "String",
+          "description": "Last name of the guardian."
+        },
+        {
+          "name": "email",
+          "type": "String",
+          "description": "Primary contact email for notifications and communication."
+        },
+        {
+          "name": "phoneNumber",
+          "type": "String",
+          "description": "Primary contact phone number."
+        },
+        {
+          "name": "relationship",
+          "type": "String",
+          "description": "Relationship to the child (e.g., Mother, Father, Legal Guardian)."
+        },
+        {
+          "name": "isPrimaryContact",
+          "type": "Boolean",
+          "description": "Indicates if this guardian is the primary contact for emergencies and communications."
+        }
+      ]
+    },
+    {
+      "name": "Staff",
+      "description": "Represents an employee or caregiver working at the daycare, with roles and qualifications.",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "description": "Unique identifier for the staff member."
+        },
+        {
+          "name": "firstName",
+          "type": "String",
+          "description": "First name of the staff member."
+        },
+        {
+          "name": "lastName",
+          "type": "String",
+          "description": "Last name of the staff member."
+        },
+        {
+          "name": "role",
+          "type": "Enum",
+          "description": "Job role (e.g., Teacher, Assistant, Administrator, Caregiver)."
+        },
+        {
+          "name": "qualifications",
+          "type": "String",
+          "description": "Certifications, degrees, or relevant training."
+        },
+        {
+          "name": "hireDate",
+          "type": "Date",
+          "description": "Date when the staff member was hired."
+        },
+        {
+          "name": "status",
+          "type": "Enum",
+          "description": "Employment status (e.g., Active, On Leave, Terminated)."
+        }
+      ]
+    },
+    {
+      "name": "Payment",
+      "description": "Represents a financial transaction for daycare services, including fees, due dates, and status.",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "description": "Unique identifier for the payment."
+        },
+        {
+          "name": "amount",
+          "type": "Decimal",
+          "description": "Monetary amount due or paid."
+        },
+        {
+          "name": "dueDate",
+          "type": "Date",
+          "description": "Date by which the payment is expected."
+        },
+        {
+          "name": "status",
+          "type": "Enum",
+          "description": "Payment status (e.g., Pending, Paid, Overdue, Partially Paid)."
+        },
+        {
+          "name": "paymentMethod",
+          "type": "Enum",
+          "description": "Method used for payment (e.g., Cash, Credit Card, Bank Transfer)."
+        },
+        {
+          "name": "paidDate",
+          "type": "Date",
+          "description": "Date when the payment was actually made, if applicable."
+        },
+        {
+          "name": "notes",
+          "type": "String",
+          "description": "Optional notes regarding the payment, such as discounts or late fees."
+        }
+      ]
+    },
+    {
+      "name": "Attendance",
+      "description": "Tracks daily presence of children, including check-in/check-out times and responsible staff.",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "description": "Unique identifier for the attendance record."
+        },
+        {
+          "name": "date",
+          "type": "Date",
+          "description": "Date of attendance."
+        },
+        {
+          "name": "checkInTime",
+          "type": "DateTime",
+          "description": "Timestamp when the child was checked in."
+        },
+        {
+          "name": "checkOutTime",
+          "type": "DateTime",
+          "description": "Timestamp when the child was checked out."
+        },
+        {
+          "name": "notes",
+          "type": "String",
+          "description": "Optional notes for the day (e.g., illness, special activities)."
+        }
+      ]
+    }
+  ],
+  "key_use_cases": [
+    {
+      "name": "EnrollChild",
+      "description": "Register a new child in the daycare system, capturing personal details and linking to guardians."
+    },
+    {
+      "name": "RecordAttendance",
+      "description": "Log daily check-in and check-out times for children, with optional notes."
+    },
+    {
+      "name": "ProcessPayment",
+      "description": "Create and update payment records, track status, and record payment methods."
+    },
+    {
+      "name": "ManageStaff",
+      "description": "Add, update, or deactivate staff members, including role and qualification management."
+    },
+    {
+      "name": "GenerateInvoice",
+      "description": "Create invoices for guardians based on attendance, fees, and payment history."
+    },
+    {
+      "name": "UpdateChildInformation",
+      "description": "Modify child details such as medical notes, contact information, or enrollment status."
+    },
+    {
+      "name": "ViewAttendanceReport",
+      "description": "Generate reports on child attendance over a specified period for billing or compliance."
+    },
+    {
+      "name": "AssignStaffToChild",
+      "description": "Link staff members to specific children or groups for caregiving responsibilities."
+    }
+  ],
+  "assumptions": [
+    "The daycare operates with a fixed schedule (e.g., standard business hours) for attendance tracking.",
+    "Payments are primarily handled per child, possibly with monthly or weekly billing cycles.",
+    "Guardians may have multiple children enrolled, and a child may have multiple guardians.",
+    "Staff roles are predefined and include permissions or responsibilities within the system.",
+    "Basic reporting features are needed for attendance, payments, and staff management.",
+    "The system will handle sensitive personal data, requiring basic security and privacy considerations.",
+    "Communication with guardians (e.g., notifications) is part of the domain but may be implemented via external services."
+  ],
+  "open_questions": [
+    "What specific legal or regulatory requirements apply to daycare operations in the target region?",
+    "How are late payments, discounts, or refunds handled within the payment process?",
+    "Is there a need for grouping children by age or class, and how are staff assigned to these groups?",
+    "What types of reports are essential for administrative or compliance purposes?",
+    "Should the system support multi-language or multi-currency features for diverse user bases?",
+    "How are emergency contacts and procedures integrated beyond guardian information?",
+    "Are there integrations with external systems (e.g., accounting software, communication platforms)?",
+    "What is the expected scale of the daycare (number of children, staff) to inform system performance needs?"
+  ]
+}
