@@ -1,75 +1,40 @@
 from pathlib import Path
-from typing import Any
+import json
 
+def generate_report(state):
+    report_path = state.out_dir / "report.md"
+    
+    # Contar archivos por tipo
+    java_files = [p for p in state.written_artifacts if p.endswith(".java")]
+    infra_files = [p for p in state.written_artifacts if "infra" in p or "docker" in p]
 
-def _write_section(f, title: str, content: Any):
-    f.write(f"\n## {title}\n\n")
-    if content is None:
-        f.write("_No data available_\n")
-        return
+    content = f"""# 🏭 Execution Report: Software Factory v2
+    
+## 💡 User Idea
+{state.idea}
 
-    if isinstance(content, (dict, list)):
-        import json
-        f.write("```json\n")
-        f.write(json.dumps(content, indent=2, ensure_ascii=False))
-        f.write("\n```\n")
-    else:
-        f.write(str(content) + "\n")
+## 📊 Summary
+- **Status:** {state.status}
+- **Total Artifacts:** {len(state.written_artifacts)}
+- **Java Classes:** {len(java_files)}
+- **Infra/SRE Files:** {len(infra_files)}
+- **QA Results:** {state.qa_stats['passed']} Passed, {state.qa_stats['fixed']} Auto-fixed
 
+## 🏗️ Domain Model: {state.domain_model.get('domain_name', 'Generic')}
+- **Entities:** {', '.join([e['name'] if isinstance(e, dict) else str(e) for e in state.domain_model.get('core_entities', [])])}
 
-def generate_report(state) -> None:
-    """
-    Generates outputs/run_xxx/report.md
-    This function must NEVER crash the pipeline.
-    """
-    try:
-        out_dir = Path(state.output_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
+## 📐 Architecture Overview
+{state.architecture.get('architecture_overview', 'Hexagonal Architecture')}
 
-        report_path = out_dir / "report.md"
+## 📂 Generated Artifacts (Inventory)
+"""
+    for artifact in state.written_artifacts:
+        content += f"- `{artifact}`\n"
 
-        with report_path.open("w", encoding="utf-8") as f:
-            f.write("# Execution Report\n\n")
+    if state.errors:
+        content += "\n## ❌ Errors Encountered\n"
+        for err in state.errors:
+            content += f"- {err}\n"
 
-            # --- IDEA ---
-            _write_section(f, "Idea", getattr(state, "idea", None))
-
-            # --- DOMAIN ---
-            _write_section(f, "Domain Model", getattr(state, "domain_model", None))
-
-            # --- ARCHITECTURE ---
-            _write_section(f, "Architecture", getattr(state, "architecture", None))
-
-            # --- BACKEND (summary only) ---
-            backend = getattr(state, "backend", None)
-            if isinstance(backend, dict):
-                summary = {
-                    k: backend.get(k)
-                    for k in ("stack", "modules", "notes")
-                    if k in backend
-                }
-                _write_section(f, "Backend (Summary)", summary)
-            else:
-                _write_section(f, "Backend (Summary)", backend)
-
-            # --- STATUS ---
-            status = getattr(state, "status", None)
-            if status == "NEEDS_INPUT":
-                _write_section(
-                    f,
-                    "Execution Status",
-                    {
-                        "status": "NEEDS_INPUT",
-                        "open_questions": getattr(state, "open_questions", []),
-                    },
-                )
-            else:
-                _write_section(
-                    f,
-                    "Execution Status",
-                    {"status": "COMPLETED"},
-                )
-
-    except Exception as e:
-        # Report generation must NEVER break execution
-        print(f"⚠️ Failed to generate report.md: {e}")
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write(content)

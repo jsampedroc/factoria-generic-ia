@@ -1,29 +1,16 @@
-# ai/pipeline/state.py
-
-from typing import Any, List, Optional
-
-
 from pathlib import Path
+from typing import List, Dict, Any, Optional
 
 class PipelineState:
-    def __init__(self, idea: str, output_dir: Path):
+    def __init__(self, idea: str, out_dir: Path):
         self.idea = idea
-        self.output_dir = output_dir
-
-        self.domain_model = None
-        self.architecture = None
-        self.backend = None
-
-        self.status = None
-        self.open_questions = []
-        self.errors = []
-
-    # Helpers explícitos (evitan bugs silenciosos)
-    def set_status(self, status: str):
-        self.status = status
-
-    def add_open_questions(self, questions: List[str]):
-        self.open_questions.extend(questions)
-
-    def add_error(self, error: str):
-        self.errors.append(error)
+        self.out_dir = out_dir
+        self.status = "STARTING"
+        self.domain_model: Dict[str, Any] = {}
+        self.architecture: Dict[str, Any] = {}
+        self.backend: Dict[str, Any] = {"artifacts": []}
+        self.infrastructure: Dict[str, Any] = {"artifacts": []} # <--- Nuevo
+        self.qa_stats = {"passed": 0, "fixed": 0, "failed": 0}   # <--- Nuevo
+        self.written_artifacts: List[str] = []
+        self.errors: List[str] = []
+        self.open_questions: List[str] = []
