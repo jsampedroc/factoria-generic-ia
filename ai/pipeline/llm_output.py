@@ -5,27 +5,35 @@ def normalize_llm_output(raw_output: str) -> dict:
     if not raw_output:
         return {"status": "ERROR", "message": "Empty output"}
 
-    # Eliminar bloques de código markdown si existen
+    # 1. Limpieza de Markdown
     cleaned = re.sub(r'```json\s*', '', raw_output)
     cleaned = re.sub(r'```\s*$', '', cleaned)
     cleaned = cleaned.strip()
 
-    # Si el JSON está truncado (no cierra con }), intentamos cerrarlo mínimamente
-    # para que al menos no rompa el script, aunque los datos estén incompletos.
-    if cleaned.startswith('{') and not cleaned.endswith('}'):
-        cleaned += '"}]}' # Intento de cierre de emergencia para el array de artifacts
-
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        # Intento final: buscar el primer { y el último }
-        start = cleaned.find('{')
-        end = cleaned.rfind('}')
-        if start != -1 and end != -1:
+        # 2. Reparación de JSON Truncado (Caso de archivos Java largos)
+        # Si detectamos que es un objeto de artefacto pero le falta el cierre
+        if '"path":' in cleaned and '"content":' in cleaned:
+            # Intentamos cerrar el string del 'content' y el objeto
+            # Buscamos si el último carácter no es }
+            if not cleaned.endswith('"}'):
+                # Eliminamos posibles caracteres rotos al final y cerramos
+                repaired = cleaned.rstrip()
+                # Si termina en una barra de escape o comilla, la limpiamos
+                repaired = re.sub(r'\\+$', '', repaired)
+                if not repaired.endswith('"'): repaired += '"'
+                if not repaired.endswith('}'): repaired += '}'
+                try:
+                    return json.loads(repaired)
+                except: pass
+
+        # 3. Búsqueda por Regex del bloque principal
+        match = re.search(r'(\{.*\})', cleaned, re.DOTALL)
+        if match:
             try:
-                return json.loads(cleaned[start:end+1])
-            except:
-                pass
-        
-        print(f"⚠️ Error crítico de formato. Longitud: {len(raw_output)} chars.")
-        return {"status": "ERROR", "raw_payload": raw_output}
+                return json.loads(match.group(1))
+            except: pass
+
+        return {"status": "ERROR", "message": "JSON irreparable", "raw": raw_output}

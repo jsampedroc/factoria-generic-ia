@@ -2,38 +2,34 @@ from crewai import Task
 import json
 
 def build_single_file_task(agent, file_path: str, domain_model: dict, architecture: dict) -> Task:
-    # Limpieza de entidades para el prompt
-    raw_entities = domain_model.get('core_entities', [])
-    entities_info = []
-    for e in raw_entities:
-        if isinstance(e, dict):
-            entities_info.append(f"{e.get('name')} ({e.get('description', 'no desc')})")
-        else:
-            entities_info.append(str(e))
-
+    # Resumen de entidades para el contexto
+    entities = [e.get('name') if isinstance(e, dict) else str(e) for e in domain_model.get('core_entities', [])]
+    
     description = f"""
-    You are an Expert Java Developer. Generate the content for:
-    FILE: {file_path}
+    You are an Expert Backend Developer. Generate the source code for:
+    FILE PATH: {file_path}
 
     CONTEXT:
-    - Domain: {domain_model.get('domain_name')}
-    - Entities context: {', '.join(entities_info)}
-    - Architecture: {architecture.get('architecture_overview')}
+    - Project: {domain_model.get('domain_name')}
+    - Entities: {', '.join(entities)}
+    - Style: Hexagonal Architecture
 
-    REQUIREMENTS:
-    1. Java 17 / Spring Boot 3.2.
-    2. Follow Clean Code and SOLID.
-    3. Implement full logic if it's a Repository, Service or Controller.
+    STRICT GUIDELINES:
+    1. Language: Java 17 / Spring Boot 3.2.
+    2. Focus on implementation logic. 
+    3. DO NOT include class-level Javadoc or extensive comments (save tokens).
+    4. Use Lombok to reduce boilerplate.
+    5. Ensure the code is complete and syntactically correct.
 
-    OUTPUT FORMAT (Strict JSON):
+    OUTPUT FORMAT (Return ONLY this JSON):
     {{
       "path": "{file_path}",
-      "content": "..."
+      "content": "Full code here..."
     }}
     """
 
     return Task(
         description=description,
-        expected_output=f"JSON with the source code for {file_path}",
+        expected_output=f"The source code for {file_path}",
         agent=agent
     )
