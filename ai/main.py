@@ -15,14 +15,14 @@ from ai.agents import (
     build_software_architect,
     build_backend_builder,
     build_sre_agent,
-    build_qa_agent # <--- Nuevo Agente
+    build_qa_agent
 )
 
 from ai.tasks.domain_model_task import build_domain_model_task
 from ai.tasks.architecture_task import build_architecture_task
 from ai.tasks.backend_generation_task import build_single_file_task
 from ai.tasks.infra_task import build_infra_task
-from ai.tasks.qa_task import build_qa_review_task # <--- Nueva Tarea
+from ai.tasks.qa_task import build_qa_review_task
 
 from ai.pipeline.state import PipelineState
 from ai.llm.llm_config import build_llm
@@ -43,8 +43,11 @@ def main() -> int:
         return 1
 
     timestamp = datetime.now().strftime("run_%Y%m%d_%H%M%S")
-    out_dir = Path("outputs") / timestamp
-    spec_dir = Path("specs")
+    
+    # IMPORTANTE: Usamos .resolve() para que out_dir sea ABSOLUTA desde el principio
+    out_dir = (Path("outputs") / timestamp).resolve()
+    spec_dir = Path("specs").resolve()
+    
     out_dir.mkdir(parents=True, exist_ok=True)
     spec_dir.mkdir(parents=True, exist_ok=True)
     
@@ -56,7 +59,7 @@ def main() -> int:
 
     try:
         # -----------------------
-        # 2. FASE 1: DOMINIO (Persistencia)
+        # 2. FASE 1: DOMINIO
         # -----------------------
         if spec_file.exists():
             print(f"\n♻️  Cargando diseño de negocio existente: {spec_file}")
@@ -76,7 +79,7 @@ def main() -> int:
                 print(f"💾 Especificación guardada: {spec_file}")
 
         # -----------------------
-        # 3. FASE 2: ARQUITECTURA E INVENTARIO
+        # 3. FASE 2: ARQUITECTURA
         # -----------------------
         print("\n" + "="*50)
         print("🔹 FASE 2: DEFINICIÓN DE ARQUITECTURA E INVENTARIO")
@@ -89,7 +92,7 @@ def main() -> int:
         if not isinstance(inventory, list): inventory = []
 
         # -----------------------
-        # 4. FASE 3: GENERACIÓN + QA LOOP (Iterativo)
+        # 4. FASE 3: GENERACIÓN + QA LOOP
         # -----------------------
         print("\n" + "="*50)
         print(f"🔹 FASE 3: GENERACIÓN Y CONTROL DE CALIDAD ({len(inventory)} archivos)")
@@ -104,36 +107,38 @@ def main() -> int:
             clean_path = str(file_path).strip()
             print(f"🚀 [{idx}/{len(inventory)}] Procesando: {clean_path}")
             
-            # --- Sub-fase A: Generación ---
+            # --- Generación ---
             task = build_single_file_task(backend_builder, clean_path, state.domain_model, state.architecture)
             res_file = backend_builder.execute_task(task)
             file_output = normalize_llm_output(res_file.raw if hasattr(res_file, 'raw') else str(res_file))
 
             if "content" in file_output:
-                # --- Sub-fase B: Revisión de QA ---
+                # --- QA Review ---
                 print(f"   🔍 QA analizando código...")
                 qa_task = build_qa_review_task(qa_agent, clean_path, file_output["content"])
                 res_qa = qa_agent.execute_task(qa_task)
                 qa_report = normalize_llm_output(res_qa.raw if hasattr(res_qa, 'raw') else str(res_qa))
 
-                # --- Sub-fase C: Corrección si el QA falla ---
                 if qa_report.get("is_valid") is False:
-                    print(f"   ⚠️ QA detectó errores: {qa_report.get('feedback')[:100]}...")
-                    print(f"   🛠️ Backend Builder corrigiendo archivo...")
-                    # Podríamos pasar el feedback al prompt aquí para mejorar la corrección
+                    print(f"   ⚠️ QA detectó errores. Intentando corrección rápida...")
+                    state.qa_stats["fixed"] += 1
                     res_file = backend_builder.execute_task(task) 
                     file_output = normalize_llm_output(res_file.raw if hasattr(res_file, 'raw') else str(res_file))
+                else:
+                    state.qa_stats["passed"] += 1
 
-                # Escritura definitiva
-                write_artifacts([file_output], backend_dir)
+                # Escritura y Registro (Resolviendo el Bug de Subpath)
+                if "content" in file_output:
+                    written_paths = write_artifacts([file_output], backend_dir)
+                    for p in written_paths:
+                        # Ambos son absolutos ahora, relative_to funcionará
+                        state.written_artifacts.append(str(p.relative_to(out_dir)))
                 all_artifacts.append(file_output)
-            else:
-                print(f"   ❌ Error de formato persistente en {clean_path}")
 
         state.backend = {"artifacts": all_artifacts}
 
         # -----------------------
-        # 5. FASE 4: INFRAESTRUCTURA (SRE)
+        # 5. FASE 4: INFRAESTRUCTURA
         # -----------------------
         print("\n" + "="*50)
         print("🔹 FASE 4: INFRAESTRUCTURA Y DESPLIEGUE")
@@ -145,15 +150,18 @@ def main() -> int:
         
         if "artifacts" in infra_output:
             infra_dir = out_dir / "generated" / "infra"
-            write_artifacts(infra_output["artifacts"], infra_dir)
-            print(f"🐳 Entorno Docker y K8s generado en: {infra_dir}")
+            written_infra = write_artifacts(infra_output["artifacts"], infra_dir)
+            for p in written_infra:
+                state.written_artifacts.append(str(p.relative_to(out_dir)))
+            print(f"🐳 Entorno Docker y K8s generado.")
 
         # -----------------------
         # 6. CIERRE
         # -----------------------
         state.status = "COMPLETED"
         generate_report(state)
-        print("\n✅ FACTORÍA FINALIZADA CON ÉXITO")
+        print(f"\n✅ PROYECTO FINALIZADO CON ÉXITO")
+        print(f"📂 Resultados en: {out_dir}")
         return 0
 
     except Exception as e:

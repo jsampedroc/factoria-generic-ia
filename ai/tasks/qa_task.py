@@ -1,27 +1,26 @@
 from crewai import Task
 
-def build_qa_review_task(agent, file_path: str, code_content: str):
+def build_qa_review_task(agent, file_path: str, code_content: str) -> Task:
     description = f"""
-    Review the following source code for the file: {file_path}
+    Review the following code for: {file_path}
 
-    CODE TO REVIEW:
+    CODE:
     {code_content}
 
-    INSTRUCTIONS:
-    1. Check for Java syntax errors (missing semicolons, unclosed braces, etc).
-    2. Ensure all necessary imports are present.
-    3. Verify it follows Spring Boot 3 standards.
-    4. If the code is truncated or incomplete, mark it as INVALID.
+    STRICT CHECKLIST:
+    1. Truncated code? (Check for missing closing braces '}}').
+    2. Correct Layer? (Domain layer must NOT have JPA/Spring annotations).
+    3. Syntax errors? (Missing semicolons, wrong imports).
 
     OUTPUT FORMAT (Strict JSON):
     {{
       "is_valid": true/false,
-      "feedback": "Description of errors found or 'None'",
-      "suggested_fix": "Brief instruction to fix the code"
+      "feedback": "Reason if invalid",
+      "suggested_fix": "Brief instruction"
     }}
     """
     return Task(
         description=description,
-        expected_output="A code quality report in JSON format.",
+        expected_output="Code quality report in JSON.",
         agent=agent
     )
