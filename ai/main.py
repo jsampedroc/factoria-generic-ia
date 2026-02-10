@@ -4,6 +4,7 @@ import sys
 import json
 import traceback
 import re
+import time # Para controlar el ritmo de la API
 
 from ai.pipeline.llm_output import normalize_llm_output
 from ai.reporting.report_generator import generate_report
@@ -26,6 +27,8 @@ from ai.tasks.qa_task import build_qa_review_task
 
 from ai.pipeline.state import PipelineState
 from ai.llm.llm_config import build_llm
+from ai.tasks.repair_task import build_repair_task
+from ai.utils.compiler import run_maven_compile
 
 def slugify(text: str) -> str:
     """Convierte la idea en un nombre de archivo seguro para la caché de specs."""
@@ -44,14 +47,21 @@ def main() -> int:
 
     timestamp = datetime.now().strftime("run_%Y%m%d_%H%M%S")
     
-    # IMPORTANTE: Usamos .resolve() para que out_dir sea ABSOLUTA desde el principio
-    out_dir = (Path("outputs") / timestamp).resolve()
-    spec_dir = Path("specs").resolve()
+    #====================================================================================================================================================================
+    # REANUDACIÓN: Ajusta out_dir según necesites
+    #====================================================================================================================================================================
+    # Para nueva ejecución:
+    # out_dir = (Path("outputs") / timestamp).resolve()
+       
+    # Para reanudar la ejecución fallida:
+    out_dir = (Path("outputs") / "run_20260209_193933").resolve()
+    #=====================================================================================================================================================================
     
+    spec_dir = Path("specs").resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     spec_dir.mkdir(parents=True, exist_ok=True)
     
-    tee = tee_to_file(out_dir / f"{timestamp}.log")
+    tee = tee_to_file(out_dir / f"execution.log")
     state = PipelineState(input_value, out_dir)
     llm = build_llm()
 
@@ -59,7 +69,7 @@ def main() -> int:
 
     try:
         # -----------------------
-        # 2. FASE 1: DOMINIO
+        # 2. FASE 1: DOMINIO (Persistente)
         # -----------------------
         if spec_file.exists():
             print(f"\n♻️  Cargando diseño de negocio existente: {spec_file}")
@@ -79,7 +89,7 @@ def main() -> int:
                 print(f"💾 Especificación guardada: {spec_file}")
 
         # -----------------------
-        # 3. FASE 2: ARQUITECTURA
+        # 3. FASE 2: ARQUITECTURA E INVENTARIO
         # -----------------------
         print("\n" + "="*50)
         print("🔹 FASE 2: DEFINICIÓN DE ARQUITECTURA E INVENTARIO")
@@ -105,40 +115,51 @@ def main() -> int:
 
         for idx, file_path in enumerate(inventory, 1):
             clean_path = str(file_path).strip()
-            print(f"🚀 [{idx}/{len(inventory)}] Procesando: {clean_path}")
+            target_file = backend_dir / clean_path
             
-            # --- Generación ---
-            task = build_single_file_task(backend_builder, clean_path, state.domain_model, state.architecture)
-            res_file = backend_builder.execute_task(task)
-            file_output = normalize_llm_output(res_file.raw if hasattr(res_file, 'raw') else str(res_file))
+            if target_file.exists() and target_file.stat().st_size > 0:
+                print(f"⏩ [{idx}/{len(inventory)}] Saltando (ya existe): {clean_path}")
+                state.written_artifacts.append(str(target_file.relative_to(out_dir)))
+                continue
 
-            if "content" in file_output:
-                # --- QA Review ---
-                print(f"   🔍 QA analizando código...")
-                qa_task = build_qa_review_task(qa_agent, clean_path, file_output["content"])
-                res_qa = qa_agent.execute_task(qa_task)
-                qa_report = normalize_llm_output(res_qa.raw if hasattr(res_qa, 'raw') else str(res_qa))
+            print(f"🚀 [{idx}/{len(inventory)}] Procesando: {clean_path}")
+            time.sleep(1)
 
-                if qa_report.get("is_valid") is False:
-                    print(f"   ⚠️ QA detectó errores. Intentando corrección rápida...")
-                    state.qa_stats["fixed"] += 1
-                    res_file = backend_builder.execute_task(task) 
-                    file_output = normalize_llm_output(res_file.raw if hasattr(res_file, 'raw') else str(res_file))
-                else:
-                    state.qa_stats["passed"] += 1
+            try:
+                task = build_single_file_task(backend_builder, clean_path, state.domain_model, state.architecture)
+                res_file = backend_builder.execute_task(task)
+                file_output = normalize_llm_output(res_file.raw if hasattr(res_file, 'raw') else str(res_file))
 
-                # Escritura y Registro (Resolviendo el Bug de Subpath)
                 if "content" in file_output:
-                    written_paths = write_artifacts([file_output], backend_dir)
-                    for p in written_paths:
-                        # Ambos son absolutos ahora, relative_to funcionará
-                        state.written_artifacts.append(str(p.relative_to(out_dir)))
-                all_artifacts.append(file_output)
+                    print(f"   🔍 QA analizando código...")
+                    qa_task = build_qa_review_task(qa_agent, clean_path, file_output["content"])
+                    res_qa = qa_agent.execute_task(qa_task)
+                    qa_report = normalize_llm_output(res_qa.raw if hasattr(res_qa, 'raw') else str(res_qa))
+
+                    if qa_report.get("is_valid") is False:
+                        print(f"   ⚠️ QA detectó errores. Intentando corrección rápida...")
+                        state.qa_stats["fixed"] += 1
+                        res_file = backend_builder.execute_task(task) 
+                        file_output = normalize_llm_output(res_file.raw if hasattr(res_file, 'raw') else str(res_file))
+                    else:
+                        state.qa_stats["passed"] += 1
+
+                    if "content" in file_output:
+                        written_paths = write_artifacts([file_output], backend_dir)
+                        for p in written_paths:
+                            state.written_artifacts.append(str(p.relative_to(out_dir)))
+                    all_artifacts.append(file_output)
+                
+            except Exception as e:
+                if "rate_limit" in str(e).lower():
+                    print("\n🛑 ERROR: Límite de API alcanzado.")
+                    sys.exit(1)
+                print(f"   ❌ Error en este archivo: {e}")
 
         state.backend = {"artifacts": all_artifacts}
 
         # -----------------------
-        # 5. FASE 4: INFRAESTRUCTURA
+        # 5. FASE 4: INFRAESTRUCTURA (Ajustada para Maven)
         # -----------------------
         print("\n" + "="*50)
         print("🔹 FASE 4: INFRAESTRUCTURA Y DESPLIEGUE")
@@ -149,14 +170,103 @@ def main() -> int:
         infra_output = normalize_llm_output(res_infra.raw if hasattr(res_infra, 'raw') else str(res_infra))
         
         if "artifacts" in infra_output:
-            infra_dir = out_dir / "generated" / "infra"
+            # CAMBIO CLAVE: Usamos backend_dir en lugar de crear una carpeta 'infra' separada
+            # Esto permite que el pom.xml quede al mismo nivel que la carpeta 'src'
+            infra_dir = backend_dir 
+            
             written_infra = write_artifacts(infra_output["artifacts"], infra_dir)
             for p in written_infra:
                 state.written_artifacts.append(str(p.relative_to(out_dir)))
-            print(f"🐳 Entorno Docker y K8s generado.")
+            print(f"🐳 Entorno Docker y Maven generado en la raíz del backend.")
+            
+
+
+
+       # -----------------------
+        # 6. FASE 5: AUTO-CURACIÓN (Compilación Maven)
+        # -----------------------
+        print("\n" + "="*50)
+        print("🔹 FASE 5: AUTO-CURACIÓN (Compilación Maven)")
+        print("="*50)
+        
+        for heal_attempt in range(5): 
+            errors = run_maven_compile(backend_dir)
+            
+            if not errors or not isinstance(errors, list):
+                print("✅ ¡El proyecto compila correctamente!")
+                break
+            
+            print(f"⚠️ Intento {heal_attempt+1}: Quedan {len(errors)} errores. Reparando...")
+            
+            # Procesamos de 10 en 10 para avanzar
+            for err in errors[:10]:
+                try:
+                    rel_path = err['file']
+                    file_to_fix = backend_dir / rel_path
+                    
+                    if file_to_fix.exists():
+                        # --- ESCENARIO A: El archivo EXISTE pero está mal ---
+                        print(f"   🔧 Reparando archivo: {rel_path}")
+                        with open(file_to_fix, 'r', encoding='utf-8') as f:
+                            broken_code = f.read()
+                        
+                        # MEJORA PARA TRUNCAMIENTO:
+                        msg = err['message']
+                        if "reached end of file" in msg.lower():
+                            msg = (
+                                "CRITICAL: The file is truncated and ends abruptly. "
+                                "Please rewrite the FULL class, ensuring all methods, builders, "
+                                "and braces are properly closed. Keep it concise to avoid token limits."
+                            )
+                        
+                        task = build_repair_task(
+                            backend_builder, 
+                            rel_path, 
+                            broken_code, 
+                            msg,
+                            state.domain_model
+                        )
+                    else:
+                        # --- ESCENARIO B: El archivo NO EXISTE (Símbolos faltantes) ---
+                        print(f"   🆕 Generando componente faltante: {rel_path}")
+                        file_to_fix.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        task = build_single_file_task(
+                            backend_builder, 
+                            rel_path, 
+                            state.domain_model, 
+                            state.architecture
+                        )
+                    
+                    # Ejecución y escritura
+                    res = backend_builder.execute_task(task)
+                    fixed_output = normalize_llm_output(res.raw if hasattr(res, 'raw') else str(res))
+                    
+                    if "content" in fixed_output:
+                        fixed_output["path"] = rel_path 
+                        write_artifacts([fixed_output], backend_dir)
+                        print(f"      ✅ Procesado: {rel_path}")
+                    
+                except Exception as e_repair:
+                    print(f"   ❌ Error procesando {err.get('file')}: {e_repair}")
+            
+            time.sleep(1) # Respiro para la API
+
+
+
+        # --- OPCIONAL: Guardar la arquitectura final en el JSON para el futuro ---
+        with open(spec_file, 'w', encoding='utf-8') as f:
+            full_spec = {
+                "domain": state.domain_model,
+                "architecture": state.architecture
+            }
+            json.dump(full_spec, f, indent=2, ensure_ascii=False)
+
+
+
 
         # -----------------------
-        # 6. CIERRE
+        # 7. CIERRE
         # -----------------------
         state.status = "COMPLETED"
         generate_report(state)
@@ -171,8 +281,10 @@ def main() -> int:
         state.errors.append(str(e))
         generate_report(state)
         return 1
+
     finally:
-        if 'tee' in locals(): tee.close()
+        if 'tee' in locals():
+            tee.close()
 
 if __name__ == "__main__":
     sys.exit(main())

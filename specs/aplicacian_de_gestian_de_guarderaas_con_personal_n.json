@@ -1,203 +1,137 @@
 {
-  "domain_name": "DaycareManagement",
+  "domain_name": "Daycare Management",
   "core_entities": [
     {
       "name": "Child",
-      "description": "A child enrolled in the daycare, with personal details, medical information, and guardian contacts.",
       "attributes": [
         "id",
         "firstName",
         "lastName",
         "dateOfBirth",
-        "medicalNotes",
         "allergies",
-        "guardianContacts"
+        "medicalNotes",
+        "enrollmentDate",
+        "status"
       ],
-      "relationships": [
-        "Guardian",
-        "AttendanceRecord",
-        "PaymentPlan"
-      ]
+      "description": "Represents a child enrolled in the daycare."
     },
     {
       "name": "Guardian",
-      "description": "A parent or legal guardian responsible for a child, with contact and payment details.",
       "attributes": [
         "id",
         "firstName",
         "lastName",
         "phoneNumber",
         "email",
-        "address"
+        "address",
+        "relationshipToChild"
       ],
-      "relationships": [
-        "Child",
-        "Payment"
-      ]
+      "description": "A parent or legal guardian responsible for a child."
     },
     {
       "name": "Staff",
-      "description": "An employee of the daycare, such as a teacher or administrator, with role and schedule information.",
       "attributes": [
         "id",
         "firstName",
         "lastName",
         "role",
+        "phoneNumber",
+        "email",
         "hireDate",
-        "contactInfo",
         "qualifications"
       ],
-      "relationships": [
-        "Shift",
-        "Classroom"
-      ]
+      "description": "Employee working at the daycare (e.g., teacher, assistant, administrator)."
     },
     {
       "name": "Classroom",
-      "description": "A group or room where children are assigned, managed by staff, with capacity and age range.",
       "attributes": [
         "id",
         "name",
-        "ageRangeMin",
-        "ageRangeMax",
+        "ageGroup",
         "capacity",
         "currentOccupancy"
       ],
-      "relationships": [
-        "Child",
-        "Staff",
-        "Activity"
-      ]
+      "description": "A physical or logical group where children are assigned."
     },
     {
-      "name": "AttendanceRecord",
-      "description": "Tracks daily check-in and check-out times for a child, including absences.",
+      "name": "Attendance",
       "attributes": [
         "id",
         "childId",
         "date",
         "checkInTime",
         "checkOutTime",
-        "absentReason"
+        "notes"
       ],
-      "relationships": [
-        "Child"
-      ]
-    },
-    {
-      "name": "Payment",
-      "description": "A payment made by a guardian for daycare services, with amount, due date, and status.",
-      "attributes": [
-        "id",
-        "guardianId",
-        "amount",
-        "dueDate",
-        "paymentDate",
-        "status",
-        "paymentMethod"
-      ],
-      "relationships": [
-        "Guardian",
-        "Invoice"
-      ]
+      "description": "Daily record of a child's presence and hours."
     },
     {
       "name": "Invoice",
-      "description": "A bill issued to a guardian detailing charges for services, with line items and totals.",
       "attributes": [
         "id",
         "guardianId",
+        "childId",
         "issueDate",
         "dueDate",
         "totalAmount",
         "status",
-        "lineItems"
+        "paymentMethod"
       ],
-      "relationships": [
-        "Guardian",
-        "Payment"
-      ]
+      "description": "Bill generated for childcare services."
     },
     {
-      "name": "Shift",
-      "description": "A work period assigned to a staff member, with start and end times.",
+      "name": "Payment",
       "attributes": [
         "id",
-        "staffId",
-        "date",
-        "startTime",
-        "endTime",
-        "breakDuration"
+        "invoiceId",
+        "amount",
+        "paymentDate",
+        "transactionId",
+        "status"
       ],
-      "relationships": [
-        "Staff"
-      ]
+      "description": "Record of a payment made against an invoice."
     },
     {
       "name": "Activity",
-      "description": "A scheduled event or lesson in a classroom, such as nap time or educational play.",
       "attributes": [
         "id",
         "classroomId",
         "name",
         "description",
-        "startTime",
-        "endTime",
-        "materialsNeeded"
+        "schedule",
+        "duration"
       ],
-      "relationships": [
-        "Classroom"
-      ]
-    },
-    {
-      "name": "PaymentPlan",
-      "description": "A billing plan associated with a child, defining frequency and rate for payments.",
-      "attributes": [
-        "id",
-        "childId",
-        "planType",
-        "rate",
-        "billingFrequency",
-        "startDate",
-        "endDate"
-      ],
-      "relationships": [
-        "Child",
-        "Invoice"
-      ]
+      "description": "Scheduled activity or lesson for children."
     }
   ],
   "key_use_cases": [
     "Enroll a new child in the daycare",
-    "Register a guardian for a child",
-    "Assign a child to a classroom",
     "Record daily attendance (check-in/check-out) for a child",
-    "Schedule staff shifts",
-    "Create and issue invoices to guardians",
-    "Process payments from guardians",
-    "Update child medical or contact information",
-    "Manage classroom activities and schedules",
-    "Generate reports on attendance, payments, or staff performance"
+    "Assign a child to a classroom",
+    "Generate monthly invoices for guardians",
+    "Process a payment for an invoice",
+    "Schedule staff shifts and assignments",
+    "Log a child's meal, nap, or incident report",
+    "View a guardian's contact and billing information",
+    "Manage staff roles and qualifications",
+    "Generate reports on attendance, payments, or classroom occupancy"
   ],
   "assumptions": [
-    "The daycare operates on a fixed schedule (e.g., weekdays, standard hours).",
-    "Guardians are responsible for payments, and each child has at least one guardian.",
-    "Staff have defined roles (e.g., teacher, assistant, admin) that affect permissions.",
-    "Attendance is tracked per child per day, with optional absence reasons.",
-    "Payments are linked to invoices, which itemize charges for services.",
-    "Classrooms have capacity limits and age-based groupings.",
-    "The system handles basic billing (invoices, payments) but not advanced accounting.",
-    "Medical information for children is stored for emergency purposes."
+    "A child can have multiple guardians, but at least one primary guardian is responsible for payments.",
+    "Staff members can be assigned to multiple classrooms or roles.",
+    "Invoices are generated periodically (e.g., monthly) based on attendance and fixed rates.",
+    "Payments are linked to specific invoices and can be partial or full.",
+    "Attendance is recorded daily and influences billing.",
+    "The system focuses on core operations, not advanced features like meal planning or transportation."
   ],
   "open_questions": [
-    "Should the system support multiple payment plans (e.g., weekly, monthly, drop-in rates)?",
-    "How are late payments or discounts handled?",
-    "Is there a need for waitlist management for full classrooms?",
-    "Should staff have user accounts with login credentials for the app?",
+    "Should guardians be able to have multiple children enrolled? (Implied yes, but needs confirmation)",
+    "Are there different pricing tiers or plans (e.g., full-time vs. part-time)?",
+    "How are late pickups or absences handled in billing?",
+    "Is there a need for waitlist management for enrollment?",
+    "Should the system support digital signatures for consent forms?",
     "Are there regulatory requirements (e.g., child-to-staff ratios) to enforce?",
-    "How are holidays or daycare closures managed in scheduling and billing?",
-    "Should guardians have access to a portal to view attendance or make payments?",
-    "Is integration with external payment gateways (e.g., credit cards) required?",
-    "How long should historical attendance and payment records be retained?"
+    "How are refunds or payment disputes handled?",
+    "Should activities be linked to specific learning standards or curricula?"
   ]
 }

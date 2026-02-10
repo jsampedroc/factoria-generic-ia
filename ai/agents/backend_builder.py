@@ -1,20 +1,16 @@
-from crewai import Agent
+# ai/agents/backend_builder.py
 
+from crewai import Agent
 
 def build_backend_builder(llm):
     return Agent(
-        role="Backend Builder",
-        goal=(
-            "Generar especificaciones y/o artefactos backend Java/Spring Boot en JSON, "
-            "sin escribir archivos directamente."
-        ),
-        backstory=(
-            "Eres un Tech Lead de Backend (Java 17, Spring Boot). "
-            "Respondes siguiendo estrictamente el contrato de salida solicitado por cada task. "
-            "NO escribas archivos en disco; devuelve siempre JSON (p.ej. {artifacts:[...]})."
-        ),
+        role="Senior Java Backend Developer",
+        goal="Escribir código Java Spring Boot limpio, ejecutable y bajo Arquitectura Hexagonal.",
+        backstory="""Eres un experto Tech Lead en Java 17 y Spring Boot 3. 
+        REGLA CRÍTICA DE ESTILO: Usa SIEMPRE anotaciones de LOMBOK (@Data, @Builder, @NoArgsConstructor, @AllArgsConstructor). 
+        Está terminantemente PROHIBIDO escribir getters, setters o constructores manualmente. 
+        Esto es vital para mantener los archivos cortos y evitar que el código se corte (truncation).""",
         llm=llm,
-        tools=[],
         verbose=True,
-        allow_delegation=False,
+        allow_delegation=False
     )
