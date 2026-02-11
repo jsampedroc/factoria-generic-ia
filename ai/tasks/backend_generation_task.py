@@ -1,29 +1,28 @@
 from crewai import Task
 
-def build_single_file_task(agent, file_path: str, domain_model: dict, architecture: dict) -> Task:
+def build_methods_logic_task(agent, class_name: str, domain_model: dict, architecture: dict) -> Task:
     description = f"""
-    You are an Expert Java Developer. Generate the source code for:
-    FILE: {file_path}
+    ACT AS: Senior Java Developer.
+    TASK: Genera exclusivamente la lógica interna para los métodos de la clase {class_name}.
 
     CONTEXT:
     - Domain: {domain_model.get('domain_name')}
     - Architecture: {architecture.get('architecture_overview')}
 
-    REQUIREMENTS:
-    1. Java 17 / Spring Boot 3.2.
-    2. Clean Code & SOLID principles.
-    3. If 'src/domain', NO Spring/JPA annotations.
-    4. If 'src/infrastructure', add necessary @Entity, @Repository, or @RestController.
-    5. No Javadoc (save tokens).
+    CONSTRAINTS:
+    1. PROHIBIDO: Incluir la definición de la clase, imports base o decoradores de infraestructura.
+    2. Requisitos técnicos: Java 17, SOLID y Clean Code.
+    3. No incluyas Javadoc ni comentarios innecesarios.
+    4. El código debe estar listo para ser insertado directamente dentro de una clase existente.
 
-    OUTPUT FORMAT (Strict JSON):
+    FORMATO DE SALIDA (Strict JSON):
     {{
-      "path": "{file_path}",
-      "content": "Full source code here"
+      "content": "Solo el cuerpo de las funciones e implementación de métodos, indentado a 4 espacios."
     }}
     """
+
     return Task(
         description=description,
-        expected_output=f"JSON with path and content for {file_path}",
+        expected_output=f"JSON con la clave 'content' conteniendo exclusivamente la lógica de los métodos para {class_name}.",
         agent=agent
     )

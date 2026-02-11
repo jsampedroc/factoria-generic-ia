@@ -1,0 +1,26 @@
+# Estructura generada por la Factoría (Standard v1.0)
+import logging
+from typing import List, Optional
+{% for imp in extra_imports %}
+import {{ imp }}
+{% endfor %}
+
+logger = logging.getLogger(__name__)
+
+class {{ class_name }}:
+    """
+    {{ description }}
+    """
+    def __init__(self):
+        pass
+
+    def execute(self, params: dict):
+        # --- Lógica de Negocio Inyectada por IA ---
+        {{ business_logic | indent(8) }}
+        # ------------------------------------------
+
+    {% if include_test_main %}
+    if __name__ == "__main__":
+        service = {{ class_name }}()
+        print(service.execute({}))
+    {% endif %}

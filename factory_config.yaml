@@ -1,0 +1,43 @@
+version: "2.0"
+factory_settings:
+  default_indent: 4
+  retry_limit: 5
+
+# Mapeo de arquitectura por lenguaje
+blueprints:
+  python:
+    extensions: [".py"]
+    templates:
+      service: "python/fastapi_service.j2"
+      repository: "python/sqlalchemy_repo.j2"
+      model: "python/pydantic_model.j2"
+    placeholders:
+      logic: "business_logic"
+      imports: "extra_imports"
+      
+  java:
+    extensions: [".java"]
+    templates:
+      service: "java/maven_service.j2"
+      controller: "java/spring_controller.j2"
+      entity: "java/jpa_entity.j2"
+    placeholders:
+      logic: "business_logic"
+      imports: "extra_imports"
+      package: "package_name"
+
+  typescript:
+    extensions: [".ts", ".tsx"]
+    templates:
+      component: "ts/react_component.j2"
+      hook: "ts/use_hook.j2"
+  
+  react:
+    extensions: [".jsx", ".tsx"]
+    templates:
+      component: "frontend/react_component.j2"
+      page: "frontend/next_page.j2"
+    placeholders:
+      logic: "component_logic"
+      styles: "tailwind_classes"
+      imports: "extra_imports"

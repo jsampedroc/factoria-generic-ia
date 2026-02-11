@@ -1,0 +1,16 @@
+# {{ project_name }} - Especificación Técnica
+
+## 🚀 Arquitectura
+Este sistema ha sido desarrollado bajo un modelo de arquitectura limpia, utilizando un stack de **{{ tech_stack }}**.
+
+## 🛠 Entidades de Dominio
+{% for entity in core_entities %}
+- **{{ entity.name }}**: {{ entity.description }}
+{% endfor %}
+
+## 📦 Despliegue
+1. Ejecute `docker-compose up`
+2. El API estará disponible en `http://localhost:8080`
+
+---
+*Documentación generada automáticamente por Factoria IA.*

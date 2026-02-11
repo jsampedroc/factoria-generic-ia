@@ -1,26 +1,32 @@
 from crewai import Task
 
-def build_repair_task(agent, file_path: str, error_msg: str, current_code: str, domain_model: dict) -> Task:
-    # Extraemos info de la entidad si el nombre del archivo coincide
-    description = f"""
-    CRITICAL REPAIR MISSION:
-    The file {file_path} is BROKEN or INCOMPLETE.
-    
-    COMPILER ERROR: {error_msg}
-    
-    CURRENT CODE STATE:
-    "{current_code}"
-
-    INSTRUCTIONS:
-    1. If the current code is nearly empty or truncated, you MUST regenerate the logic from scratch.
-    2. Reference the Domain Model to identify the necessary fields and logic for this specific file.
-    3. Ensure a complete, valid Java class that solves the compilation error.
-    4. Do not just fix the error; ensure the file is functional and consistent with the rest of the app.
-
-    OUTPUT FORMAT:
-    {{
-      "path": "{file_path}",
-      "content": "... (the full, fixed, and complete source code) ..."
-    }}
+def build_repair_task(builder, rel_path, broken_code, error_msg, domain_model):
     """
-    return Task(description=description, agent=agent, expected_output="Full fixed Java file.")
+    Construye una tarea de reparación optimizada para el modelo de templates.
+    """
+    prompt = f"""
+    Eres un agente de reparación experto. Tu objetivo es arreglar el código que está fallando en la compilación.
+    
+    ARCHIVO: {rel_path}
+    ERROR DE COMPILACIÓN: {error_msg}
+    
+    CÓDIGO ACTUAL (CON ERRORES):
+    ---
+    {broken_code}
+    ---
+    
+    INSTRUCCIONES ESTRICTAS:
+    1. Analiza el error y el modelo de dominio: {domain_model}
+    2. Genera la solución técnica.
+    3. NO devuelvas el archivo completo.
+    4. Devuelve ÚNICAMENTE un objeto JSON con este formato:
+    {{
+        "imports": ["lista.de.nuevos.imports.necesarios", "otro.import"],
+        "content": "aquí va únicamente el bloque de código de la lógica o métodos reparados"
+    }}
+    
+    Asegúrate de que el código en 'content' mantenga la indentación correcta para una clase.
+    """
+    
+    # Aquí asumo que usas el método de tu builder para crear la tarea
+    return builder.create_task(prompt=prompt, target_file=rel_path)
