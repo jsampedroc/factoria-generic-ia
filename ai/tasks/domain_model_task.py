@@ -2,27 +2,31 @@ from crewai import Task
 import json
 
 def build_domain_model_task(agent, idea: str) -> Task:
-    """
-    Crea la tarea de descubrimiento de dominio usando la clase oficial de CrewAI.
-    """
-    # En CrewAI, el 'description' actúa como el prompt principal
     description = f"""
-    Analyze the following business idea and extract a formal Domain Model.
+    Analyze the following business idea and extract a formal Domain Model for a Hexagonal Architecture.
     IDEA: {idea}
 
-    Your goal is to identify:
-    - The name of the domain.
-    - Core business entities (singular, PascalCase).
-    - Key use cases.
-    - Assumptions made.
-    - Any open questions.
+    YOUR GOAL IS TO IDENTIFY:
+    1. **domain_name**: Name of the system.
+    2. **core_entities**: List of entities (PascalCase, singular). For each entity, specify its main attributes.
+    3. **value_objects**: Identify the ID class for each entity (e.g., ChildId, StaffId) and any other value objects (e.g., Address, Money).
+    4. **enums**: Critical for business logic (e.g., Status, Roles, Types). List their possible values.
+    5. **key_use_cases**: Main business flows.
 
-    STRICT OUTPUT FORMAT:
-    You must return a valid JSON object.
+    STRICT OUTPUT FORMAT (JSON):
+    {{
+      "domain_name": "...",
+      "core_entities": {{
+         "EntityName": {{ "attributes": ["attr1", "attr2"], "repository_port": ["save", "findById"] }}
+      }},
+      "value_objects": ["ChildId", "StaffId", "Money"],
+      "enums": {{ "Status": ["ACTIVE", "INACTIVE"] }},
+      "key_use_cases": []
+    }}
     """
 
     return Task(
         description=description,
-        expected_output="A JSON object containing: domain_name, core_entities, key_use_cases, assumptions, and open_questions.",
+        expected_output="A structured JSON Domain Model including entities, value_objects, and enums.",
         agent=agent
     )

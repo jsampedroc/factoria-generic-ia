@@ -1,0 +1,17 @@
+package {{ package_name }};
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.ComponentScan;
+
+@SpringBootApplication
+@ComponentScan(basePackages = "com.daycaremanagement")
+public class {{ class_name }} {
+
+    public static void main(String[] args) {
+        SpringApplication.run({{ class_name }}.class, args);
+    }
+    
+    // Logic fragment injected by Factory Mixta (Should be empty or minimal comments)
+    {{ business_logic | indent(4) }}
+}

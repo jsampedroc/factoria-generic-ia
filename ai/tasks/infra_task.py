@@ -2,35 +2,53 @@ from crewai import Task
 import json
 
 def build_infra_task(agent, domain_model: dict, architecture: dict) -> Task:
-    # Añadimos explícitamente Lombok y pom.xml a los requerimientos
+    # Definimos el stack tecnológico basándonos en la arquitectura
+    tech_stack = architecture.get('architecture_overview', 'Spring Boot Hexagonal')
+    domain_name = domain_model.get('domain_name', 'daycare-management-system')
+
     description = f"""
-    You are a Senior SRE. Generate the infrastructure and build configuration for: {domain_model.get('domain_name')}
+    You are a Senior SRE and DevOps Engineer. Generate the infrastructure and build configuration for: {domain_name}
     
     TECH STACK:
-    {json.dumps(architecture.get('architecture_overview'))}
+    {tech_stack}
     - Java 17
-    - Spring Boot 3
-    - Lombok (MUST be included in the build configuration)
+    - Spring Boot 3.x
+    - Lombok (CRITICAL)
+    - PostgreSQL (Default Database)
 
     REQUIREMENTS:
-    1. pom.xml: Generate a complete Maven pom.xml. 
-       CRITICAL: You MUST include the Lombok dependency (org.projectlombok:lombok) and the annotation processor in the maven-compiler-plugin.
-    2. docker-compose.yml (App + PostgreSQL).
-    3. .env.example with all database and spring environment keys.
-    4. README-infrastructure.md with deployment instructions.
+    1. **pom.xml**: Generate a complete Maven pom.xml for Spring Boot 3. 
+       - MUST include: 'spring-boot-starter-data-jpa', 'spring-boot-starter-web', 'postgresql'.
+       - CRITICAL: Include 'org.projectlombok:lombok' AND the 'annotationProcessorPaths' in the 'maven-compiler-plugin' to ensure Lombok works.
+    
+    2. **Dockerfile**: Multi-stage build for Java 17 Maven.
+    
+    3. **docker-compose.yml**: 
+       - Service 'app': depends on 'db', port 8080:8080.
+       - Service 'db': use postgres:15-alpine, include POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD.
+    
+    4. **src/main/resources/application.yml**: 
+       - Configuration to connect to the 'db' service in docker-compose.
+       - ddl-auto: update.
+    
+    5. **.env**: Environment variables for DB_URL, DB_USER, DB_PASSWORD.
+    
+    6. **README-infrastructure.md**: Instructions to run 'docker-compose up'.
 
     OUTPUT FORMAT (JSON):
     {{
       "artifacts": [
         {{ "path": "pom.xml", "content": "..." }},
+        {{ "path": "Dockerfile", "content": "..." }},
         {{ "path": "docker-compose.yml", "content": "..." }},
-        {{ "path": ".env.example", "content": "..." }},
+        {{ "path": "src/main/resources/application.yml", "content": "..." }},
+        {{ "path": ".env", "content": "..." }},
         {{ "path": "README-infrastructure.md", "content": "..." }}
       ]
     }}
     """
     return Task(
         description=description,
-        expected_output="Infrastructure and Maven artifacts in JSON (including pom.xml with Lombok).",
+        expected_output="Complete infrastructure JSON including pom.xml (with Lombok), Dockerfile, docker-compose, and application.yml.",
         agent=agent
     )

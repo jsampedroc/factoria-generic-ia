@@ -1,0 +1,25 @@
+package {{ package_name }};
+
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import java.util.*;
+import java.time.*;
+import com.daycaremanagement.domain.valueobject.*;
+
+/**
+ * {{ description }}
+ * POJO Entity managed by Factory
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class {{ class_name }} {
+
+    // --- LOGIC INJECTED BY IA ---
+    {{ business_logic | indent(4) }}
+    // ----------------------------
+
+}

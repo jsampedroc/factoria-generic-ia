@@ -1,0 +1,30 @@
+package {{ package_name }};
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.http.*;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.time.*;
+
+// Value Objects y Modelos del dominio
+import com.daycaremanagement.domain.valueobject.*;
+import com.daycaremanagement.domain.model.*;
+
+{% for imp in extra_imports %}
+import {{ imp }};
+{% endfor %}
+
+/**
+ * Componente: {{ class_name }}
+ * {{ description }}
+ */
+@Slf4j
+@Component
+public class {{ class_name }} {
+
+    {{ business_logic | indent(4) }}
+
+}

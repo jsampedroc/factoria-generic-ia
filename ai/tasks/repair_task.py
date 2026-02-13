@@ -1,26 +1,40 @@
 from crewai import Task
+from pathlib import Path
 
-def build_repair_task(agent, file_path: str, error_msg: str, current_code: str, domain_model: dict) -> Task:
-    # Extraemos info de la entidad si el nombre del archivo coincide
-    description = f"""
-    CRITICAL REPAIR MISSION:
-    The file {file_path} is BROKEN or INCOMPLETE.
+def build_repair_task(agent, file_path, broken_code, error_message, domain_model):
+    file_name = Path(file_path).stem
     
-    COMPILER ERROR: {error_msg}
-    
-    CURRENT CODE STATE:
-    "{current_code}"
+    # Buscamos el contrato del repositorio en el dominio para evitar métodos inventados
+    entities = domain_model.get("core_entities", {})
+    repo_context = "Usa métodos estándar: save, findById, findAll, deleteById."
+    for name, data in entities.items():
+        if name in file_name:
+            repo_context = f"Contrato del Repositorio: {data.get('repository_port')}"
 
-    INSTRUCTIONS:
-    1. If the current code is nearly empty or truncated, you MUST regenerate the logic from scratch.
-    2. Reference the Domain Model to identify the necessary fields and logic for this specific file.
-    3. Ensure a complete, valid Java class that solves the compilation error.
-    4. Do not just fix the error; ensure the file is functional and consistent with the rest of the app.
+    prompt = f"""
+### TAREA: REPARACIÓN TÉCNICA DDD ###
+El archivo {file_path} tiene errores de compilación.
 
-    OUTPUT FORMAT:
-    {{
-      "path": "{file_path}",
-      "content": "... (the full, fixed, and complete source code) ..."
-    }}
-    """
-    return Task(description=description, agent=agent, expected_output="Full fixed Java file.")
+### ERROR DE MAVEN ###
+{error_message}
+
+### CÓDIGO ACTUAL ###
+{broken_code}
+
+### INSTRUCCIONES DE REPARACIÓN ###
+1. **Error de Tipos**: Si ves "incompatible types: Long/String cannot be converted to Id", envuelve el valor: `new ChildId(id)`.
+2. **Error de Símbolo**: {repo_context}
+3. **Duplicidad**: Asegúrate de devolver SOLO el contenido interno, sin repetir la declaración "public class".
+
+### FORMATO DE SALIDA (JSON) ###
+{{
+  "imports": ["imports adicionales si son necesarios"],
+  "content": "// Tu lógica corregida aquí...",
+  "explanation": "Breve descripción del fix"
+}}
+"""
+    return Task(
+        description=prompt,
+        agent=agent,
+        expected_output="JSON con el fragmento de lógica reparado."
+    )
