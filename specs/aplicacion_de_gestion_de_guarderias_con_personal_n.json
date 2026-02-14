@@ -1,16 +1,15 @@
 {
   "domain_model": {
-    "domain_name": "DaycareManagement",
+    "domain_name": "DaycareManagementSystem",
     "core_entities": {
       "Child": {
         "attributes": [
-          "id",
           "firstName",
           "lastName",
           "dateOfBirth",
           "allergies",
           "specialNeeds",
-          "guardianId",
+          "enrollmentDate",
           "status"
         ],
         "repository_port": [
@@ -22,31 +21,28 @@
       },
       "Guardian": {
         "attributes": [
-          "id",
           "firstName",
           "lastName",
+          "phoneNumber",
           "email",
-          "phone",
           "address",
-          "emergencyContact"
+          "relationshipToChild"
         ],
         "repository_port": [
           "save",
           "findById",
-          "findByEmail",
-          "updateContact"
+          "findByChild",
+          "updateContactInfo"
         ]
       },
       "Staff": {
         "attributes": [
-          "id",
           "firstName",
           "lastName",
           "role",
-          "email",
-          "phone",
           "hireDate",
-          "status"
+          "status",
+          "qualifications"
         ],
         "repository_port": [
           "save",
@@ -55,28 +51,25 @@
           "updateStatus"
         ]
       },
-      "Payment": {
+      "Classroom": {
         "attributes": [
-          "id",
-          "childId",
-          "amount",
-          "dueDate",
-          "paidDate",
-          "status",
-          "paymentMethod"
+          "name",
+          "capacity",
+          "ageGroup",
+          "teacherId",
+          "assistantId"
         ],
         "repository_port": [
           "save",
           "findById",
-          "findByChild",
-          "findByStatus",
-          "updatePayment"
+          "findByAgeGroup",
+          "assignStaff"
         ]
       },
       "Attendance": {
         "attributes": [
-          "id",
           "childId",
+          "classroomId",
           "checkInTime",
           "checkOutTime",
           "date",
@@ -86,23 +79,45 @@
           "save",
           "findById",
           "findByChildAndDate",
-          "updateCheckOut"
+          "recordCheckOut"
         ]
       },
-      "Classroom": {
+      "Payment": {
         "attributes": [
-          "id",
-          "name",
-          "capacity",
-          "staffIds",
-          "childIds",
+          "guardianId",
+          "childId",
+          "amount",
+          "dueDate",
+          "paymentDate",
+          "status",
+          "paymentMethod",
+          "invoiceNumber"
+        ],
+        "repository_port": [
+          "save",
+          "findById",
+          "findByGuardian",
+          "findOverdue",
+          "updateStatus"
+        ]
+      },
+      "Invoice": {
+        "attributes": [
+          "invoiceNumber",
+          "guardianId",
+          "childId",
+          "items",
+          "totalAmount",
+          "issueDate",
+          "dueDate",
           "status"
         ],
         "repository_port": [
           "save",
           "findById",
-          "findByStaff",
-          "updateCapacity"
+          "findByGuardian",
+          "generateInvoice",
+          "updateStatus"
         ]
       }
     },
@@ -110,25 +125,34 @@
       "ChildId",
       "GuardianId",
       "StaffId",
-      "PaymentId",
-      "AttendanceId",
       "ClassroomId",
+      "AttendanceId",
+      "PaymentId",
+      "InvoiceId",
       "Address",
       "Money",
-      "Email",
-      "Phone"
+      "DateRange",
+      "ContactInfo"
     ],
     "enums": {
       "ChildStatus": [
         "ENROLLED",
         "WAITLISTED",
-        "WITHDRAWN"
+        "WITHDRAWN",
+        "GRADUATED"
       ],
       "StaffRole": [
         "TEACHER",
         "ASSISTANT",
-        "ADMIN",
-        "NURSE"
+        "ADMINISTRATOR",
+        "JANITOR",
+        "COOK"
+      ],
+      "AttendanceStatus": [
+        "PRESENT",
+        "ABSENT",
+        "LATE",
+        "EXCUSED"
       ],
       "PaymentStatus": [
         "PENDING",
@@ -136,36 +160,29 @@
         "OVERDUE",
         "CANCELLED"
       ],
-      "PaymentMethod": [
-        "CASH",
-        "CREDIT_CARD",
-        "BANK_TRANSFER"
-      ],
-      "AttendanceStatus": [
-        "PRESENT",
-        "ABSENT",
-        "LATE"
-      ],
-      "ClassroomStatus": [
-        "ACTIVE",
-        "INACTIVE",
-        "FULL"
+      "InvoiceStatus": [
+        "DRAFT",
+        "ISSUED",
+        "PAID",
+        "OVERDUE",
+        "VOID"
       ]
     },
     "key_use_cases": [
-      "Enroll a new child with guardian details",
-      "Assign staff to classrooms and manage schedules",
-      "Record daily child attendance with check-in/check-out",
-      "Generate and process monthly payments for guardians",
+      "Enroll a new child in the daycare",
+      "Assign a child to a classroom based on age group",
+      "Record daily attendance for children",
+      "Generate monthly invoices for guardians",
+      "Process payments from guardians",
+      "Manage staff assignments to classrooms",
       "Update child information (allergies, special needs)",
-      "Manage staff roles and status (hire, terminate, update)",
-      "View classroom occupancy and capacity",
-      "Send payment reminders to guardians for overdue fees",
-      "Generate reports on attendance, payments, and staff performance"
+      "Handle guardian contact information updates",
+      "Track overdue payments and send reminders",
+      "Generate reports on attendance, payments, and classroom occupancy"
     ]
   },
   "architecture": {
-    "architecture_overview": "This Hexagonal Architecture for DaycareManagement is structured to ensure separation of concerns, maintainability, and testability. The core domain is isolated from external concerns like persistence and web interfaces. The architecture consists of three main layers: Domain (core business logic and entities), Application (use cases and services), and Infrastructure (external implementations like JPA and REST controllers). Each of the six core entities (Child, Guardian, Staff, Payment, Attendance, Classroom) follows a consistent pattern with 10 files (8 code + 2 tests) as specified. The Domain layer defines the model, repository ports, and value objects. The Application layer contains service logic and DTOs for data transfer. The Infrastructure layer handles persistence with JPA entities and repositories, and web controllers for REST APIs. Common files like pom.xml, Dockerfile, and the main application class are included to support building, containerization, and running the application. Testing is emphasized with unit tests for both domain models and application services using JUnit 5 and Mockito.",
+    "architecture_overview": "The DaycareManagementSystem is designed using a Hexagonal Architecture (Ports and Adapters) to ensure separation of concerns, testability, and maintainability. The core domain is isolated from external concerns like persistence and web frameworks. The structure is organized into three main layers: Domain (core business logic and entities), Application (use cases and services), and Infrastructure (external implementations like JPA and REST controllers). Each entity (Child, Guardian, Staff, Classroom, Attendance, Payment, Invoice) follows a consistent pattern with domain models, repository ports, value objects for IDs, application services and DTOs, and infrastructure adapters. Maven is used for build management with JUnit 5 and Mockito for testing. The system is containerized with Docker and includes a main application class for Spring Boot startup.",
     "file_inventory": [
       "pom.xml",
       "Dockerfile",
@@ -200,16 +217,16 @@
       "src/main/java/com/daycaremanagement/infrastructure/web/controllers/StaffController.java",
       "src/test/java/com/daycaremanagement/application/services/StaffServiceTest.java",
       "src/test/java/com/daycaremanagement/domain/model/StaffTest.java",
-      "src/main/java/com/daycaremanagement/domain/model/Payment.java",
-      "src/main/java/com/daycaremanagement/domain/repository/PaymentRepositoryPort.java",
-      "src/main/java/com/daycaremanagement/domain/valueobject/PaymentId.java",
-      "src/main/java/com/daycaremanagement/application/services/PaymentService.java",
-      "src/main/java/com/daycaremanagement/application/dto/PaymentDTO.java",
-      "src/main/java/com/daycaremanagement/infrastructure/persistence/entity/PaymentJpaEntity.java",
-      "src/main/java/com/daycaremanagement/infrastructure/persistence/repository/PaymentJpaRepository.java",
-      "src/main/java/com/daycaremanagement/infrastructure/web/controllers/PaymentController.java",
-      "src/test/java/com/daycaremanagement/application/services/PaymentServiceTest.java",
-      "src/test/java/com/daycaremanagement/domain/model/PaymentTest.java",
+      "src/main/java/com/daycaremanagement/domain/model/Classroom.java",
+      "src/main/java/com/daycaremanagement/domain/repository/ClassroomRepositoryPort.java",
+      "src/main/java/com/daycaremanagement/domain/valueobject/ClassroomId.java",
+      "src/main/java/com/daycaremanagement/application/services/ClassroomService.java",
+      "src/main/java/com/daycaremanagement/application/dto/ClassroomDTO.java",
+      "src/main/java/com/daycaremanagement/infrastructure/persistence/entity/ClassroomJpaEntity.java",
+      "src/main/java/com/daycaremanagement/infrastructure/persistence/repository/ClassroomJpaRepository.java",
+      "src/main/java/com/daycaremanagement/infrastructure/web/controllers/ClassroomController.java",
+      "src/test/java/com/daycaremanagement/application/services/ClassroomServiceTest.java",
+      "src/test/java/com/daycaremanagement/domain/model/ClassroomTest.java",
       "src/main/java/com/daycaremanagement/domain/model/Attendance.java",
       "src/main/java/com/daycaremanagement/domain/repository/AttendanceRepositoryPort.java",
       "src/main/java/com/daycaremanagement/domain/valueobject/AttendanceId.java",
@@ -220,16 +237,26 @@
       "src/main/java/com/daycaremanagement/infrastructure/web/controllers/AttendanceController.java",
       "src/test/java/com/daycaremanagement/application/services/AttendanceServiceTest.java",
       "src/test/java/com/daycaremanagement/domain/model/AttendanceTest.java",
-      "src/main/java/com/daycaremanagement/domain/model/Classroom.java",
-      "src/main/java/com/daycaremanagement/domain/repository/ClassroomRepositoryPort.java",
-      "src/main/java/com/daycaremanagement/domain/valueobject/ClassroomId.java",
-      "src/main/java/com/daycaremanagement/application/services/ClassroomService.java",
-      "src/main/java/com/daycaremanagement/application/dto/ClassroomDTO.java",
-      "src/main/java/com/daycaremanagement/infrastructure/persistence/entity/ClassroomJpaEntity.java",
-      "src/main/java/com/daycaremanagement/infrastructure/persistence/repository/ClassroomJpaRepository.java",
-      "src/main/java/com/daycaremanagement/infrastructure/web/controllers/ClassroomController.java",
-      "src/test/java/com/daycaremanagement/application/services/ClassroomServiceTest.java",
-      "src/test/java/com/daycaremanagement/domain/model/ClassroomTest.java"
+      "src/main/java/com/daycaremanagement/domain/model/Payment.java",
+      "src/main/java/com/daycaremanagement/domain/repository/PaymentRepositoryPort.java",
+      "src/main/java/com/daycaremanagement/domain/valueobject/PaymentId.java",
+      "src/main/java/com/daycaremanagement/application/services/PaymentService.java",
+      "src/main/java/com/daycaremanagement/application/dto/PaymentDTO.java",
+      "src/main/java/com/daycaremanagement/infrastructure/persistence/entity/PaymentJpaEntity.java",
+      "src/main/java/com/daycaremanagement/infrastructure/persistence/repository/PaymentJpaRepository.java",
+      "src/main/java/com/daycaremanagement/infrastructure/web/controllers/PaymentController.java",
+      "src/test/java/com/daycaremanagement/application/services/PaymentServiceTest.java",
+      "src/test/java/com/daycaremanagement/domain/model/PaymentTest.java",
+      "src/main/java/com/daycaremanagement/domain/model/Invoice.java",
+      "src/main/java/com/daycaremanagement/domain/repository/InvoiceRepositoryPort.java",
+      "src/main/java/com/daycaremanagement/domain/valueobject/InvoiceId.java",
+      "src/main/java/com/daycaremanagement/application/services/InvoiceService.java",
+      "src/main/java/com/daycaremanagement/application/dto/InvoiceDTO.java",
+      "src/main/java/com/daycaremanagement/infrastructure/persistence/entity/InvoiceJpaEntity.java",
+      "src/main/java/com/daycaremanagement/infrastructure/persistence/repository/InvoiceJpaRepository.java",
+      "src/main/java/com/daycaremanagement/infrastructure/web/controllers/InvoiceController.java",
+      "src/test/java/com/daycaremanagement/application/services/InvoiceServiceTest.java",
+      "src/test/java/com/daycaremanagement/domain/model/InvoiceTest.java"
     ]
   }
 }

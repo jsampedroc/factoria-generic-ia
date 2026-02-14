@@ -86,7 +86,7 @@ def main() -> int:
             template_engine=TemplateBuilder(),
             backend_builder=build_backend_builder(llm_cheap),
             qa_agent=build_qa_agent(llm_cheap),
-            sre_agent=build_sre_agent(llm_cheap)
+            sre_agent=build_sre_agent(llm_smart)
         )
 
         # ------------------------------------------------------------------

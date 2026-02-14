@@ -38,15 +38,15 @@ def build_infra_task(agent, domain_model: dict, architecture: dict) -> Task:
     OUTPUT FORMAT (JSON):
     {{
       "artifacts": [
-        {{ "path": "pom.xml", "content": "..." }},
-        {{ "path": "Dockerfile", "content": "..." }},
-        {{ "path": "docker-compose.yml", "content": "..." }},
-        {{ "path": "src/main/resources/application.yml", "content": "..." }},
-        {{ "path": ".env", "content": "..." }},
-        {{ "path": "README-infrastructure.md", "content": "..." }}
+        {{ "path": "pom.xml", "content": "XML_CONTENT_HERE" }},
+        {{ "path": "Dockerfile", "content": "DOCKER_CONTENT_HERE" }},
+        {{ "path": "docker-compose.yml", "content": "YAML_CONTENT_HERE" }}
       ]
     }}
+    
+    IMPORTANT: Ensure strict JSON syntax. Escape all quotes inside the content strings.
     """
+
     return Task(
         description=description,
         expected_output="Complete infrastructure JSON including pom.xml (with Lombok), Dockerfile, docker-compose, and application.yml.",
