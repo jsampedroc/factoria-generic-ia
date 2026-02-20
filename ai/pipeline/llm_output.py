@@ -1,26 +1,36 @@
 import json
 import re
 
+def clean_imports(imports_list):
+    """Limpia el error de 'import import ...;;'"""
+    cleaned = []
+    if not imports_list: return cleaned
+    
+    for imp in imports_list:
+        # Eliminamos la palabra 'import', puntos y coma y espacios
+        item = imp.replace("import ", "").replace(";", "").strip()
+        if item and item not in cleaned:
+            cleaned.append(item)
+    return cleaned
+
 def normalize_llm_output(raw_output: str) -> dict:
     if not raw_output: return {"status": "ERROR"}
     
-    # Limpiar markdown
+    # Limpiar bloques de código markdown
     cleaned = re.sub(r'```json\s*|```', '', raw_output).strip()
     
-    # REPARACIÓN: Si el JSON terminó a la mitad (común en archivos grandes)
-    if cleaned.startswith('{') and not cleaned.endswith('}'):
-        # Intentamos cerrar el campo "content" y el objeto
-        if '"content":' in cleaned:
-            cleaned = cleaned.rstrip()
-            if not cleaned.endswith('"'): cleaned += '"'
-            if not cleaned.endswith('}'): cleaned += '}'
-
     try:
-        return json.loads(cleaned)
+        data = json.loads(cleaned)
     except:
-        # Fallback: Extraer el primer bloque JSON válido que encuentre
-        match = re.search(r'(\{.*\})', cleaned, re.DOTALL)
+        match = re.search(r'(\{.*\}|\[.*\])', cleaned, re.DOTALL)
         if match:
-            try: return json.loads(match.group(1))
-            except: pass
-        return {"status": "ERROR", "message": "JSON irreparable", "raw": raw_output}
+            try: data = json.loads(match.group(1))
+            except: return {"status": "ERROR", "message": "JSON irreparable"}
+        else:
+            return {"status": "ERROR", "message": "No JSON found"}
+
+    # PROCESADO DE IMPORTS: Evitamos el doble import antes de que llegue al writer
+    if isinstance(data, dict) and "imports" in data:
+        data["imports"] = clean_imports(data["imports"])
+
+    return data

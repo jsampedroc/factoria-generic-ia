@@ -20,36 +20,33 @@ class PhaseExecutor:
         self.sre_agent = sre_agent
         self.backend_dir = state.out_dir / "generated" / "backend"
 
-
-
     def _clean_hallucinated_class(self, content, file_name):
         """🛡️ Limpiador de Seguridad: Evita que la IA escriba la cabecera de la clase."""
         content_clean = content.strip()
         
-        # 1. Limpiar bloques markdown si existen
+        # 1. Limpiar bloques markdown
         if content_clean.startswith("```"):
             content_clean = re.sub(r"```[a-z]*\n", "", content_clean).replace("```", "").strip()
         
-        # 2. Detectar y recortar la clase/interfaz/enum. Buscamos: (Tipo) (Nombre) {
-        #    Este patrón es más específico que el anterior.
-        class_pattern = r"(?:public\s+)?(?:class|interface|enum)\s+\w+\s*(\{|<)" # Busca la llave de apertura
+        # 2. Detectar y eliminar declaración de clase completa con Regex
+        class_pattern = r"(?:public\s+)?(?:class|interface|enum)\s+\w+.*\{"
         match = re.search(class_pattern, content_clean, re.DOTALL)
         
         if match:
-            print(f"   🛡️  Limpiador: Recortando estructura redundante en {file_name}")
-            # El final es la última llave '}' que no esté dentro de una función
-            start_idx = match.end() - 1 # Empezar justo después del {
+            print(f"   🛡️  Limpiador: Recortando cabecera de clase en {file_name}")
+            start_idx = match.end()
             end_idx = content_clean.rfind("}")
-            
             if end_idx > start_idx:
-                # Extraemos el contenido entre el { de la declaración y el último }
                 content_clean = content_clean[start_idx:end_idx].strip()
         
-        # 3. Eliminar imports y packages que se hayan colado en el fragmento
+        # 3. Eliminar llaves huérfanas si la IA devolvió el cuerpo envuelto
+        if content_clean.startswith("{") and content_clean.endswith("}"):
+            content_clean = content_clean[1:-1].strip()
+
+        # 4. Eliminar imports o packages que se hayan colado en el fragmento
         lines = [l for l in content_clean.split("\n") if not l.strip().startswith(("package ", "import "))]
+        
         return "\n".join(lines).strip()
-    
-    
 
     def execute_generation(self, inventory):
         """Fase 3: Generación Mixta + QA Loop"""
@@ -88,17 +85,34 @@ class PhaseExecutor:
                     output["path"] = clean_path 
                     logic_fragment = self._clean_hallucinated_class(output["content"], file_name)
                     
-                    # --- SELECTOR INTELIGENTE DE TEMPLATE ---
+                    # --- REFORZADO: SELECTOR INTELIGENTE DE TEMPLATE ---
                     ext = Path(clean_path).suffix
+            
                     if ext == ".java":
                         path_lower = clean_path.lower()
+                                                
                         if "mainapplication" in path_lower:
-                            t_path = "java/maven_main.j2"
+                            t_path = "java/maven_main.j2"  # --- FORZAMOS UN FRAGMENTO SEGURO PARA MAIN ---
+                            output["content"] = self.template_engine.render(t_path, {
+                            "class_name": file_name,
+                            "package_name": calculate_package(clean_path),
+                            "description": "Main Application Entry Point"
+                                                        })
+                            self.state.qa_stats["passed"] += 1
                         elif any(x in path_lower for x in ["domain/model", "domain/valueobject", "application/dto"]):
                             t_path = "java/maven_pojo.j2"
                         elif "repositoryport" in path_lower:
                             t_path = "java/maven_port.j2" 
-                        else: # Service, Controller, RepositoryImpl
+                        elif "infrastructure/persistence/repository" in path_lower:
+                            t_path = "java/maven_repository_interface.j2"
+                        elif "infrastructure/persistence/entity" in path_lower:
+                            t_path = "java/maven_jpa_entity.j2"
+                        # --- NUEVA REGLA EXPLÍCITA PARA TESTS ---
+                        elif "src/test/" in path_lower: 
+                            t_path = "java/maven_test.j2" # ¡DEBE USAR EL TEMPLATE DE TEST!
+                        elif "domain/repository" in path_lower:
+                            t_path = "java/maven_port_interface.j2"
+                        else: # Service, Controller
                             t_path = "java/maven_class.j2"
                         
                         output["content"] = self.template_engine.render(t_path, {
@@ -108,8 +122,9 @@ class PhaseExecutor:
                             "business_logic": logic_fragment,
                             "description": f"Componente {file_name}"
                         })
+                    # --- FIN SELECCIÓN DE TEMPLATE ---
 
-                    # QA Loop (Skipeado para MainApplication)
+                    # QA Loop
                     if "mainapplication" not in clean_path.lower():
                         qa_task = build_qa_review_task(self.qa_agent, clean_path, output["content"])
                         qa_res = self.qa_agent.execute_task(qa_task)
@@ -122,7 +137,7 @@ class PhaseExecutor:
                     else:
                         self.state.qa_stats["passed"] += 1
 
-                    # ESCRITURA FÍSICA Y REGISTRO EN EL ESTADO
+                    # ESCRITURA FÍSICA Y REGISTRO
                     target_file.parent.mkdir(parents=True, exist_ok=True)
                     write_artifacts([output], self.backend_dir)
                     self.state.written_artifacts.append(clean_path)
@@ -131,46 +146,23 @@ class PhaseExecutor:
                 print(f"   ❌ Error en {clean_path}: {e}")
 
     def execute_infrastructure(self):
-        """Fase 4: Infraestructura"""
-        print("\n" + "="*50)
-        print("🐳 FASE 4: GENERANDO INFRAESTRUCTURA")
-        print("="*50)
-        
+        """Fase 4: Infraestructura REAL (pom.xml, Dockerfile, application.yml)"""
+        print("\n🐳 FASE 4: GENERANDO INFRAESTRUCTURA")
         try:
             infra_task = build_infra_task(self.sre_agent, self.state.domain_model, self.state.architecture)
             res = self.sre_agent.execute_task(infra_task)
-            
-            # --- DEBUGGING: Ver qué narices está devolviendo la IA ---
-            raw_output = res.raw if hasattr(res, 'raw') else str(res)
-            print(f"🔍 DEBUG SRE Raw Output (First 100 chars): {raw_output[:100]}...")
-            
-            output = normalize_llm_output(raw_output)
+            output = normalize_llm_output(res.raw if hasattr(res, 'raw') else str(res))
             
             if output and "artifacts" in output:
-                # Asegurar que el directorio existe
-                self.backend_dir.mkdir(parents=True, exist_ok=True)
-                
                 written = write_artifacts(output["artifacts"], self.backend_dir)
-                
-                if not written:
-                     print("⚠️ ALERTA: write_artifacts devolvió una lista vacía.")
-                
-                for p in written:
-                    rel_p = str(p.relative_to(self.backend_dir))
-                    if rel_p not in self.state.written_artifacts:
-                        self.state.written_artifacts.append(rel_p)
-                
+                for a in output["artifacts"]:
+                    path = a["path"]
+                    if path not in self.state.written_artifacts:
+                        self.state.written_artifacts.append(path)
                 print(f"✅ Infraestructura escrita: {[p.name for p in written]}")
-            else:
-                print(f"❌ ERROR FASE 4: La IA no devolvió un JSON válido con la clave 'artifacts'.")
-                print(f"   Contenido recibido: {raw_output}")
-                
         except Exception as e:
-            print(f"❌ Excepción crítica en Fase 4: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"❌ Error en Fase 4: {e}")
 
-            
     def execute_healing(self):
         """Fase 5: Reparación Maven"""
         print("\n🔍 FASE 5: AUTO-CURACIÓN")
@@ -195,7 +187,6 @@ class PhaseExecutor:
                     fix["path"] = rel_path
                     logic_fix = self._clean_hallucinated_class(fix["content"], Path(rel_path).stem)
                     
-                    # Seleccionar template basado en la ruta
                     path_lower = rel_path.lower()
                     t_path = "java/maven_pojo.j2" if any(x in path_lower for x in ["model", "valueobject", "dto"]) else "java/maven_class.j2"
                     

@@ -1,0 +1,16 @@
+package {{ package_name }};
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.*;
+import com.daycaremanagement.domain.valueobject.*;
+import com.daycaremanagement.infrastructure.persistence.entity.*;
+
+/**
+ * JPA Repository Implementation: {{ class_name }}
+ * Implements the Port and handles ORM mapping.
+ */
+public interface {{ class_name }} extends JpaRepository<{{ entity_name }}JpaEntity, UUID> { // Usa UUID o Long
+
+    {{ business_logic | indent(4) }}
+
+}

@@ -4,7 +4,7 @@ from pathlib import Path
 def build_repair_task(agent, file_path, broken_code, error_message, domain_model):
     file_name = Path(file_path).stem
     
-    # Buscamos el contrato del repositorio en el dominio para evitar métodos inventados
+    # Buscamos el contrato del repositorio para dar contexto
     entities = domain_model.get("core_entities", {})
     repo_context = "Usa métodos estándar: save, findById, findAll, deleteById."
     for name, data in entities.items():
@@ -22,9 +22,10 @@ El archivo {file_path} tiene errores de compilación.
 {broken_code}
 
 ### INSTRUCCIONES DE REPARACIÓN ###
-1. **Error de Tipos**: Si ves "incompatible types: Long/String cannot be converted to Id", envuelve el valor: `new ChildId(id)`.
-2. **Error de Símbolo**: {repo_context}
-3. **Duplicidad**: Asegúrate de devolver SOLO el contenido interno, sin repetir la declaración "public class".
+1. **NO ESCRIBAS LA CLASE COMPLETA**: Solo devuelve el bloque corregido que va dentro de las llaves.
+2. **Error de Tipos**: Si ves "incompatible types: Long/String cannot be converted to Id", envuelve el valor: `new ChildId(id)`.
+3. **Error de Símbolo**: {repo_context}
+4. **Duplicidad**: NO incluyas "public class {file_name}", ni "@Data", ni "@Service". El sistema ya las añade.
 
 ### FORMATO DE SALIDA (JSON) ###
 {{
